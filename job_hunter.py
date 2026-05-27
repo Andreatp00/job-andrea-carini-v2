@@ -256,7 +256,7 @@ def scrape_portals() -> pd.DataFrame:
             logger.info(f"[{counter}/{total}] Portali: '{term}' in {label}")
             try:
                 jobs = scrape_jobs(
-                    site_name=["indeed", "linkedin"],
+                    site_name=["indeed", "linkedin", "glassdoor", "jooble"],
                     search_term=term,
                     location=country_cfg["location"],
                     country_indeed=country_cfg["country_indeed"],
@@ -593,30 +593,36 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     # Punteggio part-time / smart working
     part_time_score = 0
     if contains_any(full_text, ["part-time", "part time", "tempo parziale", "mezza giornata", "20 ore", "25 ore", "30 ore"]):
-        part_time_score += 15
-    if is_smart_working(location, description, title):
-        part_time_score += 20  # Smart working è molto desiderato
+        part_time_score += 40  # Priorità altissima al part-time (studente universitario)
     
-    # Punteggio chimica rimosso, sostituito da competenze ufficio
+    if is_smart_working(location, description, title):
+        part_time_score += 20
+    
+    # Bonus WordPress / E-commerce (skill specifica)
+    tech_bonus = 0
+    if contains_any(full_text, ["wordpress", "ecommerce", "e-commerce", "woocommerce", "shopify", "gestione ordini"]):
+        tech_bonus += 20
+
+    # Punteggio ufficio / ragioneria
     office_score = 0
     if contains_any(full_text, [
         "amministrativo", "contabilità", "fatturazione", "segreteria", "ufficio",
         "commercialista", "ragioneria", "contabile", "bilancio", "partita doppia",
     ]):
-        office_score += 15
+        office_score += 20
 
     # Punteggio geografico
     geo_score = 0
     if is_trapani_area(location):
-        geo_score += 25  # Trapani è la priorità massima
+        geo_score += 30  # Trapani è la priorità assoluta
     elif country == "Trapani":
-        geo_score += 25
+        geo_score += 30
     elif is_sicily_area(location):
         geo_score += 15
     elif country == "Sicilia":
         geo_score += 15
     elif country == "Italia" and is_smart_working(location, description, title):
-        geo_score += 20  # Smart working Italia
+        geo_score += 20
     elif country == "Italia":
         geo_score += 5
     
@@ -624,21 +630,21 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     if "trapani" in full_text or "marsala" in full_text or "erice" in full_text or "alcamo" in full_text:
         geo_score += 10
 
-    rule_score = keyword_score_raw + geo_score + level_score + office_score + part_time_score
+    rule_score = keyword_score_raw + geo_score + level_score + office_score + part_time_score + tech_bonus
     final_score = min(100, rule_score)
 
     if final_score < MINIMUM_RELEVANT_SCORE:
         return {"excluded": True, "excluded_reason": "sotto_soglia_pertinenza"}
 
     why_parts = []
-    if geo_score > 0:
-        why_parts.append(f"Geo +{geo_score}")
-    if part_time_score > 0:
-        why_parts.append("Part-time/Smart OK")
-    if level_score > 0:
-        why_parts.append(f"Livello +{level_score}")
+    if part_time_score >= 40:
+        why_parts.append("PART-TIME OK")
+    if geo_score >= 30:
+        why_parts.append("ZONA TRAPANI")
+    if tech_bonus > 0:
+        why_parts.append("WordPress/E-comm")
     if hits:
-        why_parts.append(", ".join(hits[:3]))
+        why_parts.append(", ".join(hits[:2]))
 
     smart = is_smart_working(location, description, title)
     modality = "Smart Working" if smart else "In Sede"

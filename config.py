@@ -25,8 +25,9 @@ MISTRAL_MODEL = os.environ.get("MISTRAL_MODEL", "open-mixtral-8x7b")
 # ============================================================
 PROFILE = {
     "name": "",
-    "headline": "Diplomato Ragioneria AFM | 4 anni esperienza amministrativa | 25 anni | Trapani",
+    "headline": "Diplomato Ragioneria AFM | 4 anni esperienza (Vendite, Back Office, WordPress) | 25 anni | Trapani",
     "degree": "Diploma Ragioneria - Indirizzo AFM (Amministrazione, Finanza, Marketing)",
+    "university_status": "Studente Universitario (Cerca Part-Time)",
     "age": 25,
     "location": "Trapani, Sicilia",
     "mobility": ["Trapani e provincia", "Sicilia", "Smart Working / Remoto Italia"],
@@ -34,9 +35,9 @@ PROFILE = {
     "experience_years": 4,
     "experience_roles": [
         "Addetto vendite e assistenza clienti",
-        "Gestione cassa, fatture, resi, chiusura/apertura",
-        "Gestione e-commerce WordPress",
-        "Sviluppo aziendale e back office",
+        "Gestione cassa, fatturazione, resi, chiusura/apertura",
+        "Gestione e-commerce WordPress (WooCommerce)",
+        "Sviluppo aziendale e back office amministrativo",
     ],
     "soft_skills": [
         "Gestionali aziendali",
@@ -44,78 +45,66 @@ PROFILE = {
         "Contabilità di base",
         "WordPress / E-commerce",
         "Pacchetto Office (Excel, Word)",
-        "Lavoro di squadra",
-        "Organizzazione e precisione",
+        "Precisione e gestione cassa",
+        "Affiancamento e apprendimento rapido",
     ],
     "target_roles": [
-        "Addetto/a back office",
-        "Impiegato/a amministrativo/a",
-        "Addetto/a contabilità",
+        "Addetto/a back office part-time",
+        "Impiegato/a amministrativo/a part-time",
+        "Addetto/a contabilità part-time",
         "Segretario/a amministrativo/a",
         "Addetto/a fatturazione",
-        "Impiegato/a ufficio acquisti",
-        "Addetto/a customer service back office",
-        "Assistente amministrativo/a",
-        "Addetto/a gestione documentale",
-        "Impiegato/a ufficio personale",
-        "Operatore amministrativo contabile",
         "Praticante studio commercialista",
         "Addetto/a e-commerce e amministrazione",
+        "Customer service back office",
+        "Istruttore amministrativo (Concorsi C)",
+        "Addetto/a gestione documentale",
     ],
 }
 
 # ============================================================
-# TERMINI DI RICERCA — Portali (LinkedIn, Indeed)
+# TERMINI DI RICERCA — Portali (LinkedIn, Indeed, Subito)
 # ============================================================
 SEARCH_TERMS = [
-    # Back office / Amministrativo - Trapani e Provincia
-    "\"back office\" Trapani",
-    "\"back office\" Marsala",
-    "\"back office\" Mazara del Vallo",
-    "\"impiegato amministrativo\" Trapani",
-    "\"impiegato amministrativo\" Marsala",
-    "\"addetto contabilità\" Trapani",
-    "\"fatturazione\" Trapani",
-    "\"segreteria\" Trapani",
-    "\"amministrazione\" Trapani",
+    # Back office / Amministrativo / Ragioneria - Trapani e Provincia
+    "\"back office\" Trapani part-time",
+    "\"back office\" Marsala part-time",
+    "\"impiegato amministrativo\" Trapani part-time",
+    "\"addetto contabilità\" Trapani diploma",
+    "\"fatturazione\" Trapani part-time",
+    "\"segreteria\" Trapani part-time",
+    "\"ragioneria\" Trapani diploma",
+    "\"praticante\" studio commercialista Trapani",
     "\"ufficio\" Trapani part-time",
-    "\"commercialista\" Trapani",
-    "\"praticante\" Trapani",
-    "\"contabilità\" Trapani",
-    "\"amministrativo\" Alcamo",
-    "\"ufficio\" Castelvetrano",
+    "\"amministrativo\" Alcamo part-time",
+    "\"back office\" Mazara del Vallo",
     
-    # Part-time
-    "\"part-time\" Trapani ufficio",
-    "\"part-time\" Marsala",
-    "\"part-time\" Mazara",
-    "\"part-time\" Trapani amministrazione",
-    "\"part-time\" Trapani segreteria",
-    "\"part-time\" Sicilia amministrativo",
+    # WordPress / E-commerce (Data Entry / Admin)
+    "\"wordpress\" back office Italia remoto",
+    "\"ecommerce\" amministrativo remoto",
+    "\"data entry\" Trapani",
+    "\"gestione ordini\" wordpress remoto",
     
-    # Smart working / Remoto
-    "\"smart working\" back office Italia",
-    "\"remoto\" amministrativo Italia",
-    "\"lavoro da casa\" contabilità",
+    # Smart working / Remoto Italia (Part-time / Diploma)
+    "\"smart working\" amministrativo part-time",
+    "\"remoto\" back office diploma",
+    "\"lavoro da casa\" contabilità part-time",
     "\"telelavoro\" amministrazione Italia",
-    "\"remote\" back office Italy junior",
-    "\"work from home\" administrative Italy",
+    "\"customer service\" remoto part-time",
+    "\"assistente virtuale\" amministrativo",
     
-    # E-commerce / WordPress
-    "\"e-commerce\" amministrazione Trapani",
-    "\"wordpress\" back office Italia",
-    "\"gestionale\" Trapani",
+    # Keyword generiche per smart working "basta che paghino"
+    "\"smart working\" senza esperienza diploma",
+    "\"remoto\" part-time diplomato",
 ]
 
 GOOGLE_SEARCH_TERMS = [
-    "\"lavoro\" back office Trapani Marsala Mazara \"part-time\"",
-    "\"offerta lavoro\" ragioneria AFM Trapani provincia",
-    "\"assunzione\" amministrativo Trapani Marsala Alcamo",
-    "\"lavoro da casa\" amministrativo contabilità\" diplomati",
-    "\"smart working\" impiegato amministrativo Italia",
-    "\"part-time\" amministrazione Sicilia diplomato",
-    "\"stage\" ufficio Trapani Marsala",
-    "concorsi pubblici Trapani provincia diplomati ragioneria",
+    "\"lavoro\" back office Trapani Marsala \"part-time\" diploma",
+    "\"offerta lavoro\" ragioneria AFM Trapani provincia senza laurea",
+    "\"smart working\" impiegato amministrativo part-time Italia",
+    "\"stage\" ufficio Trapani diploma",
+    "concorsi pubblici Trapani categoria C diplomati",
+    "\"lavoro da casa\" gestione ordini wordpress",
 ]
 
 # ============================================================
