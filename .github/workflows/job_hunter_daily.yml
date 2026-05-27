@@ -2,10 +2,11 @@ name: Job Hunter Bot - Ricerca Giornaliera
 
 on:
   schedule:
-    # Esecuzione automatica ogni giorno alle 08:00 UTC
     - cron: '0 8 * * *'
   workflow_dispatch:
-    # Permette l'avvio manuale dalla tab Actions
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run-bot:
@@ -24,6 +25,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Debug - Check secrets availability
+        run: |
+          echo "TELEGRAM_BOT_TOKEN set: ${{ secrets.TELEGRAM_BOT_TOKEN != '' && 'YES' || 'NO' }}"
+          echo "TELEGRAM_CHAT_ID set: ${{ secrets.TELEGRAM_CHAT_ID != '' && 'YES' || 'NO' }}"
+          echo "OPENAI_API_KEY set: ${{ secrets.OPENAI_API_KEY != '' && 'YES' || 'NO' }}"
+
       - name: Run Job Hunter Bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -33,4 +40,5 @@ jobs:
           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
           EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
           MISTRAL_MODEL: ${{ secrets.MISTRAL_MODEL }}
-        run: python job_hunter.py
+        run: |
+          python job_hunter.py 2>&1 || echo "EXIT_CODE=$?"
