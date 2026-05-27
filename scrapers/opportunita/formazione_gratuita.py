@@ -49,10 +49,22 @@ def scrape_opportunita() -> pd.DataFrame:
             "universita": "📚 Agevolazioni Studio Universitario",
         }.get(tipo, tipo)
         
-        # Determina località
-        if "sicilia" in descrizione.lower() or "sicilia" in name.lower() or "er su" in name.lower() or "unipa" in name.lower():
+        # Determina località e modalità
+        desc_lower = descrizione.lower()
+        title_lower = name.lower()
+        
+        if "online" in desc_lower or "online" in title_lower or " app " in desc_lower or "sito" in desc_lower or "web" in desc_lower:
+            modality = "Online / Smart"
+        else:
+            modality = "In Sede"
+
+        if "sicilia" in desc_lower or "sicilia" in title_lower or "er su" in title_lower or "unipa" in title_lower:
             location = "Sicilia"
-        elif "ue" in tipo or "europe" in name.lower() or "erasmus" in name.lower() or "eu" in name.lower():
+            if "trapani" in desc_lower or "trapani" in title_lower:
+                location = "Trapani"
+            elif "palermo" in desc_lower or "palermo" in title_lower:
+                location = "Palermo"
+        elif "ue" in tipo or "europe" in title_lower or "erasmus" in title_lower or "eu " in title_lower or "euro" in title_lower:
             location = "Europa"
         else:
             location = "Italia"
@@ -62,6 +74,7 @@ def scrape_opportunita() -> pd.DataFrame:
             "company": tipo_label,
             "location": location,
             "search_country": location,
+            "modality": modality,
             "job_url": url,
             "official_url": url,
             "description": descrizione,

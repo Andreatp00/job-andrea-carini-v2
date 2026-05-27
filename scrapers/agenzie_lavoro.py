@@ -85,41 +85,57 @@ TARGET_ROLE_KEYWORDS = [
     "part-time", "tempo parziale", "mezza giornata",
     "customer service", "servizio clienti", "amministrazione",
     "ragioneria", "bilancio", "iva", "fatture", "ordini",
+    "trapani", "marsala", "mazara", "alcamo", "castelvetrano",
 ]
 
 EXCLUDE_ROLE_KEYWORDS = [
     "operaio", "magazziniere", "cameriere", "barista", "cuoco",
-    "pizzaiolo", "commesso", "venditore", "promoter", "autista",
-    "elettricista", "idraulico", "manutenzione", "programmatore",
+    "pizzaiolo", "commesso", "venditore", "promoter", "agente di commercio",
+    "autista", "elettricista", "idraulico", "manutenzione", "programmatore",
     "sviluppatore", "informatico", "tecnico informatico",
-    "infermiere", "medico", "farmacista", "ingegnere",
+    "infermiere", "medico", "farmacista", "ingegnere", "architetto",
 ]
 
 
 def _parse_agency_page(html: str, agency_name: str, site_domain: str, location: str) -> list[dict]:
     """
     Parsa una pagina di agenzia di lavoro e cerca annunci pertinenti.
-    Funzione generica adattabile a diverse strutture HTML.
+    Tenta di estrarre link diretti.
     """
     results = []
     soup = BeautifulSoup(html, "html.parser")
     
-    # Strategia 1: Cerca link con job title
-    for link in soup.find_all("a", href=True):
-        href = link.get("href", "")
-        text = link.get_text(" ", strip=True)
+    # Strategia 1: Cerca in articoli o card (solitamente contengono link più diretti)
+    # Adecco, Manpower, Randstad usano spesso card con link all'annuncio
+    items = soup.select("article, div[class*='job'], div[class*='card'], li[class*='job'], tr[class*='job'], div[class*='offerta']")
+    
+    for item in items:
+        # Cerca il link più probabile all'annuncio (spesso il titolo è un link)
+        link_el = item.find("a", href=True)
+        if not link_el:
+            continue
+            
+        href = link_el.get("href", "")
+        title = item.get_text(" ", strip=True)
         
-        if not text or len(text) < 10:
+        # Se il link contiene parole come "offerte", "cerca", "search", scartalo come link diretto
+        if any(x in href.lower() for x in ["/offerte-lavoro/", "/cerca-lavoro/", "?", "filter"]):
+             # Se è un link di navigazione, prova a cercarne un altro dentro l'item
+             links = item.find_all("a", href=True)
+             for l in links:
+                 h = l.get("href", "")
+                 if "/job/" in h.lower() or "/dettaglio/" in h.lower() or "-annuncio-" in h.lower() or "/lavoro/" in h.lower():
+                     href = h
+                     title = l.get_text(" ", strip=True)
+                     break
+
+        if not title or len(title) < 8:
             continue
         
-        text_lower = text.lower()
-        
-        # Deve contenere almeno un keyword target
-        if not any(kw in text_lower for kw in TARGET_ROLE_KEYWORDS):
+        title_lower = title.lower()
+        if not any(kw in title_lower for kw in TARGET_ROLE_KEYWORDS):
             continue
-        
-        # Non deve contenere keyword escluse
-        if any(kw in text_lower for kw in EXCLUDE_ROLE_KEYWORDS):
+        if any(kw in title_lower for kw in EXCLUDE_ROLE_KEYWORDS):
             continue
         
         # Completa URL
@@ -129,61 +145,50 @@ def _parse_agency_page(html: str, agency_name: str, site_domain: str, location: 
             continue
         
         results.append({
-            "title": text[:200],
-            "company": agency_name,
-            "location": location,
-            "search_country": location,
-            "job_url": href,
-            "official_url": href,
-            "description": f"{agency_name} | {text[:200]}",
-            "site": site_domain,
-            "source_type": "agenzia_lavoro",
-            "date_posted": datetime.now().strftime("%Y-%m-%d"),
-        })
-    
-    # Strategia 2: Cerca in articoli o card
-    for item in soup.select("article, div[class*='job'], div[class*='card'], li[class*='job'], tr[class*='job'], div[class*='offerta']"):
-        title_el = item.find(["h2", "h3", "h4", "a", "p", "span"])
-        link_el = item.find("a", href=True)
-        
-        if not title_el or not link_el:
-            continue
-        
-        title = title_el.get_text(" ", strip=True)
-        href = link_el.get("href", "")
-        
-        if not title or len(title) < 10:
-            continue
-        
-        title_lower = title.lower()
-        
-        if not any(kw in title_lower for kw in TARGET_ROLE_KEYWORDS):
-            continue
-        if any(kw in title_lower for kw in EXCLUDE_ROLE_KEYWORDS):
-            continue
-        
-        if href.startswith("/"):
-            href = f"https://www.{site_domain}{href}"
-        elif not href.startswith("http"):
-            continue
-        
-        # Deduplica
-        existing_titles = {r["title"] for r in results}
-        if title[:200] in existing_titles:
-            continue
-        
-        results.append({
             "title": title[:200],
             "company": agency_name,
             "location": location,
             "search_country": location,
             "job_url": href,
             "official_url": href,
-            "description": f"{agency_name} | {title[:200]}",
+            "description": f"{agency_name} | {title[:250]}",
             "site": site_domain,
             "source_type": "agenzia_lavoro",
             "date_posted": datetime.now().strftime("%Y-%m-%d"),
         })
+
+    # Strategia 2: Se non ha trovato nulla con le card, prova i link generici (fallback)
+    if not results:
+        for link in soup.find_all("a", href=True):
+            href = link.get("href", "")
+            text = link.get_text(" ", strip=True)
+            
+            if not text or len(text) < 10:
+                continue
+            
+            text_lower = text.lower()
+            if not any(kw in text_lower for kw in TARGET_ROLE_KEYWORDS):
+                continue
+            if any(kw in text_lower for kw in EXCLUDE_ROLE_KEYWORDS):
+                continue
+            
+            if href.startswith("/"):
+                href = f"https://www.{site_domain}{href}"
+            elif not href.startswith("http"):
+                continue
+            
+            results.append({
+                "title": text[:200],
+                "company": agency_name,
+                "location": location,
+                "search_country": location,
+                "job_url": href,
+                "official_url": href,
+                "description": f"{agency_name} | {text[:200]}",
+                "site": site_domain,
+                "source_type": "agenzia_lavoro",
+                "date_posted": datetime.now().strftime("%Y-%m-%d"),
+            })
     
     return results
 

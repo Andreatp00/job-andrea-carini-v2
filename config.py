@@ -68,9 +68,12 @@ PROFILE = {
 # TERMINI DI RICERCA — Portali (LinkedIn, Indeed)
 # ============================================================
 SEARCH_TERMS = [
-    # Back office / Amministrativo
+    # Back office / Amministrativo - Trapani e Provincia
     "\"back office\" Trapani",
+    "\"back office\" Marsala",
+    "\"back office\" Mazara del Vallo",
     "\"impiegato amministrativo\" Trapani",
+    "\"impiegato amministrativo\" Marsala",
     "\"addetto contabilità\" Trapani",
     "\"fatturazione\" Trapani",
     "\"segreteria\" Trapani",
@@ -79,9 +82,13 @@ SEARCH_TERMS = [
     "\"commercialista\" Trapani",
     "\"praticante\" Trapani",
     "\"contabilità\" Trapani",
+    "\"amministrativo\" Alcamo",
+    "\"ufficio\" Castelvetrano",
     
     # Part-time
     "\"part-time\" Trapani ufficio",
+    "\"part-time\" Marsala",
+    "\"part-time\" Mazara",
     "\"part-time\" Trapani amministrazione",
     "\"part-time\" Trapani segreteria",
     "\"part-time\" Sicilia amministrativo",
@@ -101,14 +108,14 @@ SEARCH_TERMS = [
 ]
 
 GOOGLE_SEARCH_TERMS = [
-    "\"lavoro\" back office Trapani \"part-time\"",
-    "\"offerta lavoro\" ragioneria AFM Trapani",
-    "\"assunzione\" amministrativo Trapani provincia",
+    "\"lavoro\" back office Trapani Marsala Mazara \"part-time\"",
+    "\"offerta lavoro\" ragioneria AFM Trapani provincia",
+    "\"assunzione\" amministrativo Trapani Marsala Alcamo",
     "\"lavoro da casa\" amministrativo contabilità\" diplomati",
     "\"smart working\" impiegato amministrativo Italia",
     "\"part-time\" amministrazione Sicilia diplomato",
-    "\"stage\" ufficio Trapani",
-    "concorsi pubblici Trapani diplomati ragioneria",
+    "\"stage\" ufficio Trapani Marsala",
+    "concorsi pubblici Trapani provincia diplomati ragioneria",
 ]
 
 # ============================================================
@@ -186,7 +193,14 @@ OPPORTUNITA_SITES = [
     {"name": "Erasmus+ Giovani", "url": "https://www.erasmusplus.it/", "tipo": "ue", "descrizione": "Scambi giovanili e volontariato europeo finanziati dall'UE (18-30 anni)"},
     {"name": "Corpo Europeo di Solidarietà", "url": "https://europeansolidaritycorps.europa.eu/it", "tipo": "ue", "descrizione": "Volontariato retribuito all'estero per giovani 18-30, spese coperte dall'UE"},
     {"name": "DiscoverEU", "url": "https://europa.eu/youth/discovereu_it", "tipo": "ue", "descrizione": "Pass Interrail gratuito per viaggiare in Europa a 18 anni"},
+    {"name": "Eurodesk Italy", "url": "https://www.eurodesk.it/", "tipo": "ue", "descrizione": "Portale ufficiale UE per l'orientamento sui programmi europei per i giovani (scambi, volontariato, lavoro)"},
+    {"name": "Salto-Youth", "url": "https://www.salto-youth.net/", "tipo": "ue", "descrizione": "Bandi per scambi giovanili e formazione non formale finanziati dall'UE (spese coperte)"},
+    {"name": "EURES - Lavoro in Europa", "url": "https://ec.europa.eu/eures/", "tipo": "ue", "descrizione": "Offerte di lavoro, tirocinio e apprendistato in tutta Europa per giovani"},
     {"name": "Fondo per il Finanziamento Startup Giovanili", "url": "https://www.mimit.gov.it/it/incentivi/incentivi-per-le-startup", "tipo": "ue", "descrizione": "Contributi a fondo perduto per avviare un'attività under 35"},
+    
+    # Tirocini e formazione Palermo (se ne vale la pena)
+    {"name": "Centro per l'Impiego Palermo", "url": "https://www.regione.sicilia.it/istituzioni/regione/strutture-regionali/assessorato-famiglia-politiche-sociali-lavoro/dipartimento-lavoro/centri-impiego/palermo", "tipo": "tirocinio", "descrizione": "Offerte di lavoro e tirocini amministrativi in provincia di Palermo"},
+    {"name": "Formazione Palermo - Corsi Gratuiti", "url": "https://www.comune.palermo.it/", "tipo": "formazione", "descrizione": "Bandi per corsi di formazione professionale gratuiti nel comune di Palermo"},
     
     # Tirocini retribuiti
     {"name": "Tirocini Retribuiti Regione Sicilia", "url": "https://www.regione.sicilia.it/lavoro/tirocini", "tipo": "tirocinio", "descrizione": "Tirocini formativi retribuiti finanziati dalla Regione Sicilia per giovani"},

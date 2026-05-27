@@ -18,13 +18,18 @@ HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
+        "Chrome/124.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Referer": "https://www.subito.it/",
+    "Connection": "keep-alive",
 }
 
-# Query di ricerca su Subito.it per Trapani
+# Sessione globale per mantenere i cookie
+session = requests.Session()
+
+# Query di ricerca su Subito.it per Trapani e Provincia
 SUBITO_SEARCHES = [
     # Back office / Amministrativo
     {"query": "back office", "location": "trapani"},
@@ -35,8 +40,14 @@ SUBITO_SEARCHES = [
     {"query": "commercialista", "location": "trapani"},
     {"query": "ragioneria", "location": "trapani"},
     {"query": "praticante", "location": "trapani"},
-    {"query": "stage ufficio", "location": "trapani"},
     {"query": "amministrazione", "location": "trapani"},
+    
+    # Provincia Trapani
+    {"query": "back office", "location": "marsala"},
+    {"query": "amministrativo", "location": "marsala"},
+    {"query": "contabilità", "location": "mazara"},
+    {"query": "ufficio", "location": "alcamo"},
+    {"query": "amministrativo", "location": "castelvetrano"},
     
     # Part-time
     {"query": "part time ufficio", "location": "trapani"},
@@ -48,30 +59,25 @@ SUBITO_SEARCHES = [
     {"query": "lavoro da casa contabilità", "location": "italia"},
     {"query": "remoto back office", "location": "italia"},
     {"query": "telelavoro amministrazione", "location": "italia"},
-    
-    # Provincia Trapani
-    {"query": "lavoro ufficio", "location": "marsala"},
-    {"query": "lavoro ufficio", "location": "alcamo"},
-    {"query": "lavoro ufficio", "location": "erice"},
 ]
 
 
 def _build_subito_url(query: str, location: str) -> str:
     """
     Costruisce URL di ricerca Subito.it
-    Formato: https://www.subito.it/annunci-sicilia/vendita/?q=query&region=Trapani
     """
     q = query.lower().replace(" ", "-")
-    loc = location.lower().replace(" ", "-")
     
     if location == "trapani":
         return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani"
     elif location == "marsala":
         return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani&city=Marsala"
+    elif location == "mazara":
+        return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani&city=Mazara-del-vallo"
     elif location == "alcamo":
         return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani&city=Alcamo"
-    elif location == "erice":
-        return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani&city=Erice"
+    elif location == "castelvetrano":
+        return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani&city=Castelvetrano"
     elif location == "italia":
         return f"https://www.subito.it/annunci-italia/vendita/?q={q}"
     else:
@@ -134,7 +140,7 @@ def scrape_subito() -> pd.DataFrame:
         logger.info(f"Subito: '{query}' in {location}")
         
         try:
-            response = requests.get(url, headers=HEADERS, timeout=20)
+            response = session.get(url, headers=HEADERS, timeout=20)
             if response.status_code == 200:
                 items = _parse_subito_items(response.text, query, location)
                 for item in items:

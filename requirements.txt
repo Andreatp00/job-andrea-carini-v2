@@ -2,7 +2,7 @@
 # Python 3.10+
 
 # Job scraping
-jobspy>=0.31
+python-jobspy>=1.1.0
 pandas>=2.0
 requests>=2.31
 beautifulsoup4>=4.12

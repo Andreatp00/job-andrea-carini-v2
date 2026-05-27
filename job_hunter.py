@@ -410,8 +410,25 @@ def is_trapani_area(location: str) -> bool:
         "san vito", "alcamo", "marsala", "mazara", "castelvetrano",
         "buseto", "calatafimi", "campobello", "fulgatore",
         "petrosino", "salemi", "partanna", "castellammare",
+        "pantelleria", "favignana", "gibellina", "vita", "salaparuta", "poggioreale",
     ]
     return any(area in loc for area in trapani_areas)
+
+
+def is_wrong_region(location: str) -> bool:
+    """Rileva se la località è palesemente in un'altra regione (es. Veneto, Lombardia)."""
+    loc = normalize_text(location).lower()
+    wrong_regions = [
+        "veneto", "lombardia", "piemonte", "emilia", "toscana", "lazio", 
+        "campania", "puglia", "calabria", "marche", "umbria", "abruzzo",
+        "venezia", "milano", "torino", "bologna", "firenze", "roma", "napoli", "bari",
+        "vicenza", "treviso", "padova", "verona", "brescia", "bergamo",
+    ]
+    # Se contiene una di queste MA NON contiene Trapani/Sicilia
+    if any(reg in loc for reg in wrong_regions):
+        if not is_trapani_area(location) and not is_sicily_area(location):
+            return True
+    return False
 
 
 def is_sicily_area(location: str) -> bool:
@@ -521,6 +538,10 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     if country and country not in INCLUDED_COUNTRIES:
         return {"excluded": True, "excluded_reason": "paese_fuori_scope"}
 
+    # Filtro stretto sulla località per evitare falsi positivi (es. Veneto)
+    if is_wrong_region(location) and not is_smart_working(location, description, title):
+        return {"excluded": True, "excluded_reason": "localita_non_pertinente"}
+
     if contains_any(title, EXCLUDE_KEYWORDS_TITLE):
         return {"excluded": True, "excluded_reason": "titolo_non_compatibile"}
 
@@ -619,10 +640,14 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     if hits:
         why_parts.append(", ".join(hits[:3]))
 
+    smart = is_smart_working(location, description, title)
+    modality = "Smart Working" if smart else "In Sede"
+
     return {
         "excluded": False,
         "excluded_reason": "",
         "country": country or row.get("search_country", ""),
+        "modality": modality,
         "role_family": role_family,
         "company_tier": company_tier,
         "english_ok": english_ok,
@@ -787,7 +812,7 @@ def build_tracker_sheet(df: pd.DataFrame) -> pd.DataFrame:
     tracker["Note"] = ""
     return tracker[
         [
-            "title", "company", "search_country", "location", "final_score", "match_grade",
+            "title", "company", "search_country", "location", "modality", "final_score", "match_grade",
             "why_match", "job_url", "Da_Valutare", "Da_Candidare", "Candidata",
             "Data_Candidatura", "Follow_Up", "Colloquio", "Esito", "Note",
         ]
@@ -797,6 +822,7 @@ def build_tracker_sheet(df: pd.DataFrame) -> pd.DataFrame:
             "company": "Azienda/Ente",
             "search_country": "Zona",
             "location": "Località",
+            "modality": "Modalità",
             "final_score": "Score",
             "match_grade": "Classe",
             "why_match": "Perché",
@@ -819,7 +845,7 @@ def export_reports(relevant_df: pd.DataFrame, excluded_df: pd.DataFrame) -> tupl
     ].copy()
 
     export_columns = [
-        "title", "company", "search_country", "location", "role_family", "company_tier",
+        "title", "company", "search_country", "location", "modality", "role_family", "company_tier",
         "source_type", "site", "final_score", "rule_score", "ai_score", "match_grade",
         "why_match", "matched_keywords", "job_url",
     ]
