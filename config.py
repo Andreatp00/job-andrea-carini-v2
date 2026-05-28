@@ -338,11 +338,11 @@ ROLE_FAMILY_KEYWORDS = {
 # ============================================================
 HOURS_OLD = 120
 RESULTS_WANTED = 50
-MINIMUM_RELEVANT_SCORE = 30
+MINIMUM_RELEVANT_SCORE = 20  # Abbassato da 30 a 20 per includere più offerte
 TOP_MATCH_SCORE = 70
 MEDIUM_MATCH_MIN = 50
 MEDIUM_MATCH_MAX = 69
-BORDERLINE_SCORE = 35
+BORDERLINE_SCORE = 30  # Abbassato da 35 a 30
 HISTORY_RETENTION_DAYS = 60
 
 # ============================================================

@@ -18,7 +18,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from hashlib import sha1
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse, quote
 
 import pandas as pd
 import requests
@@ -256,7 +256,7 @@ def scrape_portals() -> pd.DataFrame:
             logger.info(f"[{counter}/{total}] Portali: '{term}' in {label}")
             try:
                 jobs = scrape_jobs(
-                    site_name=["indeed", "linkedin", "glassdoor", "jooble"],
+                    site_name=["indeed", "linkedin", "glassdoor", "jooble", "monster", "infojobs"],
                     search_term=term,
                     location=country_cfg["location"],
                     country_indeed=country_cfg["country_indeed"],
@@ -355,6 +355,269 @@ def scrape_company_sites() -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
+def scrape_italian_portals() -> pd.DataFrame:
+    """
+    Scraping di portali italiani specifici non coperti da jobspy.
+    Cerca su: Bakeca, TrovoLavoro, Lavoro e Carriera, ecc.
+    """
+    italian_portals = [
+        {
+            "name": "Bakeca",
+            "base_url": "https://www.bakeca.it",
+            "search_endpoint": "/offerte-lavoro",
+            "query_param": "q",
+            "location_param": "l",
+            "locations": ["Trapani", "Sicilia", "Italia"],
+        },
+        {
+            "name": "TrovoLavoro",
+            "base_url": "https://www.trovolavoro.it",
+            "search_endpoint": "/offerte",
+            "query_param": "q",
+            "location_param": "luogo",
+            "locations": ["Trapani", "Sicilia", "Italia"],
+        },
+        {
+            "name": "Jobrapido",
+            "base_url": "https://it.jobrapido.com",
+            "search_endpoint": "/offerte-di-lavoro",
+            "query_param": "q",
+            "location_param": "l",
+            "locations": ["Trapani", "Sicilia", "Italia"],
+        },
+        {
+            "name": "Neuvoo",
+            "base_url": "https://neuvoo.it",
+            "search_endpoint": "/",
+            "query_param": "q",
+            "location_param": "l",
+            "locations": ["Trapani", "Sicilia", "Italia"],
+        },
+        {
+            "name": "Jobsora",
+            "base_url": "https://it.jobsora.com",
+            "search_endpoint": "/",
+            "query_param": "q",
+            "location_param": "l",
+            "locations": ["Trapani", "Sicilia", "Italia"],
+        },
+    ]
+    
+    all_jobs = []
+    
+    for portal in italian_portals:
+        for search_term in SEARCH_TERMS[:15]:  # Limita a prime 15 query per velocità
+            for location in portal["locations"]:
+                try:
+                    # Costruisci l'URL di ricerca
+                    base = portal["base_url"]
+                    endpoint = portal["search_endpoint"]
+                    
+                    # Aggiungi parametri di ricerca
+                    query_params = []
+                    query_params.append(f"{portal['query_param']}={quote(search_term)}")
+                    query_params.append(f"{portal['location_param']}={quote(location)}")
+                    
+                    url = f"{base}{endpoint}?{'&'.join(query_params)}"
+                    
+                    logger.info(f"Portale {portal['name']}: '{search_term}' in {location}")
+                    
+                    response = requests.get(url, headers=HEADERS, timeout=25)
+                    
+                    if response.status_code != 200:
+                        logger.warning(f"  -> HTTP {response.status_code}")
+                        continue
+                    
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    
+                    # Cerca link a annunci di lavoro (selettori generici)
+                    job_links = soup.select("a[href*='/offerte/'], a[href*='/lavoro/'], a[href*='/job/']")
+                    job_links += soup.select("a[href*='dettaglio']")
+                    
+                    found = 0
+                    for link in job_links[:5]:  # Max 5 per portale/query/location
+                        href = link.get("href", "")
+                        title = normalize_text(link.get_text(" ", strip=True))
+                        
+                        if not href or not title or len(title) < 5:
+                            continue
+                        
+                        # Completa URL se relativo
+                        if href.startswith("/"):
+                            href = f"{base}{href}"
+                        elif not href.startswith("http"):
+                            continue
+                        
+                        # Filtra per keyword rilevanti nel titolo
+                        title_lower = title.lower()
+                        if not contains_any(title_lower, [
+                            "amministrativo", "contabilità", "back office", "fatturazione",
+                            "segreteria", "ufficio", "impiegato", "part-time", "smart working",
+                            "remoto", "ragioneria", "diploma", "praticante"
+                        ]):
+                            continue
+                        
+                        if contains_any(title_lower, EXCLUDE_KEYWORDS_TITLE):
+                            continue
+                        
+                        all_jobs.append({
+                            "title": title[:200],
+                            "company": portal["name"],
+                            "location": location,
+                            "search_country": location if location in ["Trapani", "Sicilia"] else "Italia",
+                            "job_url": href,
+                            "official_url": href,
+                            "description": f"{portal['name']} | query: {search_term}",
+                            "site": portal["base_url"].replace("https://", "").replace("www.", ""),
+                            "source_type": "italian_portal",
+                            "date_posted": datetime.now().strftime("%Y-%m-%d"),
+                        })
+                        found += 1
+                    
+                    if found > 0:
+                        logger.info(f"  -> {found} offerte trovate")
+                    
+                except Exception as exc:
+                    logger.warning(f"  -> Errore {portal['name']}: {exc}")
+                
+                time.sleep(2)  # Delay per non essere bloccati
+    
+    if not all_jobs:
+        return pd.DataFrame()
+    
+    return pd.DataFrame(all_jobs)
+
+
+def search_duckduckgo() -> list[dict]:
+    """
+    Cerca su DuckDuckGo per trovare offerte di lavoro su tutti i siti .it
+    Restituisce una lista di risultati grezzi da parsare.
+    """
+    results = []
+    
+    # Query di ricerca specifiche per questo profilo
+    # Crea query che cercano su tutti i siti .it
+    queries = [
+        'site:*.it "back office" part-time Trapani',
+        'site:*.it "impiegato amministrativo" diploma',
+        'site:*.it "contabilità" "part-time" Sicilia',
+        'site:*.it "segreteria" "smart working"',
+        'site:*.it "praticante" "studio commercialista" Trapani',
+        'site:*.it "addetto" "ufficio" diploma',
+        'site:*.it "fatturazione" "tempo parziale"',
+        'site:*.it "ragioneria" "stage"',
+        'site:*.it "concorsi pubblici" "categoria C" diplomati',
+        'site:*.it "back office" remoto Italia',
+    ]
+    
+    for query in queries:
+        try:
+            url = f"https://html.duckduckgo.com/html/?q={quote(query)}"
+            response = requests.post(
+                "https://html.duckduckgo.com/html/",
+                data={"q": query, "kl": "it-it"},
+                headers=HEADERS,
+                timeout=30,
+            )
+            
+            if response.status_code != 200:
+                logger.warning(f"DuckDuckGo HTTP {response.status_code} per: {query[:50]}")
+                continue
+            
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # Cerca tutti i link nei risultati
+            result_links = soup.select("a.result__a, a[class*='result__url'], [class*='result-link']")
+            
+            found = 0
+            for link in result_links[:10]:  # Max 10 per query
+                href = link.get("href", "")
+                title = normalize_text(link.get_text(" ", strip=True))
+                
+                if not href or not title or len(title) < 5:
+                    continue
+                
+                # Filtra URL non rilevanti
+                href_lower = href.lower()
+                if any(skip in href_lower for skip in [
+                    "facebook.com", "twitter.com", "linkedin.com/in/",
+                    "youtube.com", "instagram.com", "wikipedia.org",
+                    "google.com/search", "bing.com"
+                ]):
+                    continue
+                
+                # Completa URL se necessario
+                if href.startswith("http"):
+                    pass  # OK
+                elif href.startswith("//"):
+                    href = f"https:{href}"
+                elif href.startswith("/"):
+                    # Prova a ricostruire l'URL
+                    continue  # Salta, non sappiamo il dominio
+                else:
+                    continue
+                
+                # Filtra per keyword rilevanti
+                title_lower = title.lower()
+                if not contains_any(title_lower, [
+                    "lavoro", "offerta", "cerco", "assumo", "assunzione",
+                    "impiego", "posizione", "annuncio", "candidatura"
+                ]):
+                    continue
+                
+                # Non escludere ancora qui, lascia che il filtro principale decida
+                # Aggiungi il risultato
+                results.append({
+                    "title": title[:200],
+                    "job_url": href,
+                    "official_url": href,
+                    "description": f"DuckDuckGo search: {query[:80]}",
+                    "site": extract_domain(href),
+                    "source_type": "duckduckgo",
+                    "location": "Italia",  # Sarà determinato in normalize_jobs
+                    "search_country": "Italia",
+                    "company": "",
+                    "date_posted": datetime.now().strftime("%Y-%m-%d"),
+                })
+                found += 1
+                
+                if found >= 5:  # Max 5 per query
+                    break
+                    
+            if found > 0:
+                logger.info(f"DuckDuckGo: {found} risultati per query: {query[:60]}")
+                
+        except Exception as exc:
+            logger.warning(f"Errore DuckDuckGo: {exc}")
+        
+        time.sleep(3)  # Delay più lungo per evitare ban
+    
+    return results
+
+
+def universal_job_search() -> pd.DataFrame:
+    """
+    Ricerca universale su TUTTI i portali possibili.
+    Usa DuckDuckGo per trovare offerte che non sono coperte dai portali specifici.
+    """
+    logger.info("=== RICERCA UNIVERSALE (DuckDuckGo) ===")
+    
+    try:
+        results = search_duckduckgo()
+        
+        if not results:
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(results)
+        df = df.drop_duplicates(subset=["job_url"], keep="first")
+        logger.info(f"Ricerca universale: {len(df)} risultati unici")
+        return df
+        
+    except Exception as exc:
+        logger.warning(f"Errore ricerca universale: {exc}")
+        return pd.DataFrame()
+
+
 def normalize_jobs(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
@@ -451,6 +714,62 @@ def is_smart_working(location: str, description: str, title: str) -> bool:
     return any(kw in text for kw in smart_keywords)
 
 
+def is_italy_only_location(location: str) -> bool:
+    """Verifica se la location è generica Italia senza specifiche regionali."""
+    loc = normalize_text(location).lower()
+    italy_keywords = ["italia", "italy", "nazionale", "tutta italia", "tutta italia"]
+    return any(kw in loc for kw in italy_keywords)
+
+
+def is_allowed_location(location: str, search_country: str = "") -> bool:
+    """
+    Determina se una località è permessa per questo profilo.
+    Permesso: Trapani, Sicilia, Smart Working/Remoto/Italia (solo se search_country è Trapani/Sicilia)
+    Escluso: Tutte le altre città/regioni italiane e estere
+    """
+    loc = normalize_text(location).lower()
+    
+    # Se è Trapani o Sicilia -> permesso
+    if is_trapani_area(location) or is_sicily_area(location):
+        return True
+    
+    # Se contiene keyword di smart working -> permesso
+    if is_smart_working(location, "", ""):
+        return True
+    
+    # Se la location è generica "Italia" ma il search_country specifica Trapani/Sicilia
+    if is_italy_only_location(location):
+        country = normalize_text(search_country).lower()
+        if country in ["trapani", "sicilia"]:
+            return True
+        # Se non è smart working e non è Trapani/Sicilia -> NON permesso
+        return False
+    
+    # Se la location contiene altre città/regioni italiane NON in Sicilia
+    # e non è smart working -> NON permesso
+    other_cities = [
+        "milano", "roma", "torino", "bologna", "firenze", "napoli", "bari",
+        "venezia", "verona", "genova", "trieste", "trento", "bolzano",
+        "parma", "modena", "reggio emilia", "ravenna", "rimini",
+        "lombardia", "piemonte", "emilia", "toscana", "lazio", 
+        "campania", "puglia", "calabria", "marche", "umbria", "abruzzo",
+        "veneto", "liguria", "friuli", "valle d'aosta", "sardegna",
+        "bergamo", "brescia", "padova", "vicenza", "treviso",
+        "mantova", "cremona", "lecco", "lodi", "sondrio", "varese",
+        "obi", "novara", "monza", "brianza", "comasco", "varesotto",
+    ]
+    if any(city in loc for city in other_cities):
+        return False
+    
+    # Se non si capisce la location, ma non è evidentemente sbagliata,
+    # verifica se contiene "italia" senza altre specifiche
+    if "italia" in loc or "italy" in loc:
+        return True  # Accetta location generiche Italia
+    
+    # Default: accetta (per non escludere offerte valide con location non standard)
+    return True
+
+
 def classify_role_family(full_text: str) -> str:
     for family, keywords in ROLE_FAMILY_KEYWORDS.items():
         if contains_any(full_text, keywords):
@@ -538,9 +857,14 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     if country and country not in INCLUDED_COUNTRIES:
         return {"excluded": True, "excluded_reason": "paese_fuori_scope"}
 
-    # Filtro stretto sulla località per evitare falsi positivi (es. Veneto)
-    if is_wrong_region(location) and not is_smart_working(location, description, title):
+    # Filtro stretto sulla località per evitare falsi positivi
+    # Usa il nuovo sistema di filtraggio geografico proattivo
+    if not is_allowed_location(location, row.get("search_country", "")):
         return {"excluded": True, "excluded_reason": "localita_non_pertinente"}
+    
+    # Controllo aggiuntivo con il vecchio sistema per sicurezza
+    if is_wrong_region(location) and not is_smart_working(location, description, title):
+        return {"excluded": True, "excluded_reason": "localita_non_pertinente_wrong_region"}
 
     if contains_any(title, EXCLUDE_KEYWORDS_TITLE):
         return {"excluded": True, "excluded_reason": "titolo_non_compatibile"}
@@ -677,6 +1001,42 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     }
 
 
+def evaluate_job_second_chance(row: pd.Series, evaluation: dict) -> dict:
+    """
+    Valutazione secondaria per offerte che sono state escluse
+    ma potrebbero essere rilevanti per questo profilo.
+    
+    Questo ogni la possibilità a offerte borderline che contengono
+    keyword critiche per il profilo Back Office / Ragioneria.
+    """
+    title = normalize_text(row.get("title"))
+    description = normalize_text(row.get("description"))
+    full_text = f"{title} {description}".lower()
+    
+    # Controlla se contiene keyword CRITICHE per questo profilo
+    critical_keywords = [
+        "back office", "amministrativo", "contabilità", "fatturazione",
+        "segreteria", "ufficio", "impiegato", "part-time", "smart working",
+        "remoto", "ragioneria", "diploma", "praticante", "studio commercialista",
+        "concorsi pubblici", "categoria c", "categoria d", "trapani", "sicilia",
+        "addetto contabilità", "assistente amministrativo", "gestione documentale"
+    ]
+    
+    # Se contiene almeno 2 keyword critiche, NON escludere e assegna score minimo
+    matching_keywords = [kw for kw in critical_keywords if kw in full_text]
+    if len(matching_keywords) >= 2:
+        logger.info(f"Second chance: '{title[:50]}' - matched {len(matching_keywords)} keywords: {matching_keywords[:3]}")
+        return {
+            "excluded": False,
+            "excluded_reason": "",
+            "final_score": 25,  # Score minimo per superare la soglia
+            "match_grade": "C",
+            "why_match": f"Second chance - {', '.join(matching_keywords[:3])}"
+        }
+    
+    return evaluation
+
+
 def filter_and_rank(df: pd.DataFrame, previous_fingerprints: set[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
     relevant_rows = []
     excluded_rows = []
@@ -684,6 +1044,11 @@ def filter_and_rank(df: pd.DataFrame, previous_fingerprints: set[str]) -> tuple[
     for _, row in df.iterrows():
         row_dict = row.to_dict()
         evaluation = evaluate_job(row, previous_fingerprints)
+        
+        # Se escluso, prova la second chance
+        if evaluation.get("excluded"):
+            evaluation = evaluate_job_second_chance(row, evaluation)
+        
         merged = {**row_dict, **evaluation}
         if evaluation.get("excluded"):
             excluded_rows.append(merged)
@@ -1137,9 +1502,25 @@ def main():
         logger.warning(f"Errore opportunità: {exc}")
         df_opportunita = pd.DataFrame()
 
+    # Scraping Portali Italiani aggiuntivi (Bakeca, TrovoLavoro, Jobrapido, ecc.)
+    try:
+        df_italian_portals = scrape_italian_portals()
+        logger.info(f"Portali italiani (Bakeca, TrovoLavoro, ecc.): {len(df_italian_portals) if not df_italian_portals.empty else 0}")
+    except Exception as exc:
+        logger.warning(f"Errore portali italiani: {exc}")
+        df_italian_portals = pd.DataFrame()
+
+    # Ricerca Universale (DuckDuckGo) - cerca su TUTTI i siti .it
+    try:
+        df_universal = universal_job_search()
+        logger.info(f"Ricerca universale (DuckDuckGo): {len(df_universal) if not df_universal.empty else 0}")
+    except Exception as exc:
+        logger.warning(f"Errore ricerca universale: {exc}")
+        df_universal = pd.DataFrame()
+
     frames = [
         frame for frame in [
-            df_portals, df_company, df_subito, df_agenzie, df_concorsi, df_opportunita
+            df_portals, df_company, df_subito, df_agenzie, df_concorsi, df_opportunita, df_italian_portals, df_universal
         ] if not frame.empty
     ]
 
