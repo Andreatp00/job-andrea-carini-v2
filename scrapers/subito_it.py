@@ -1,176 +1,236 @@
 """
 Scraper per Subito.it — Annunci di lavoro Trapani e provincia
-Subito è molto usato a Trapani per annunci di lavoro locali.
+USA L'API JSON UFFICIALE di Subito.it (endpoint hades.subito.it)
+usata dalla loro app mobile e web React → NESSUN anti-bot, nessun 403.
 """
 
 import logging
-import re
 import time
 from datetime import datetime
 
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 
 logger = logging.getLogger("JobHunter.Subito")
 
+# ─── API JSON ufficiale Subito.it ─────────────────────────────────────────────
+SUBITO_API = "https://hades.subito.it/v1/search/classifieds"
+
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
+        "Chrome/120.0.6099.144 Mobile Safari/537.36"
     ),
+    "Accept": "application/json, text/plain, */*",
     "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     "Referer": "https://www.subito.it/",
-    "Connection": "keep-alive",
+    "Origin": "https://www.subito.it",
+    "X-Subito-Env": "production",
 }
 
-# Sessione globale per mantenere i cookie
-session = requests.Session()
+# Categoria 29 = Lavoro > Offerte di lavoro su Subito.it
+SUBITO_CATEGORY = 29
+# Region ID 11 = Sicilia (regione interna Subito)
+SUBITO_REGION_SICILIA = 11
 
-# Query di ricerca su Subito.it per Trapani e Provincia
+# ─── Ricerche configurate ────────────────────────────────────────────────────
 SUBITO_SEARCHES = [
-    # Back office / Amministrativo
-    {"query": "back office", "location": "trapani"},
-    {"query": "impiegato amministrativo", "location": "trapani"},
-    {"query": "contabilità", "location": "trapani"},
-    {"query": "fatturazione", "location": "trapani"},
-    {"query": "segreteria", "location": "trapani"},
-    {"query": "commercialista", "location": "trapani"},
-    {"query": "ragioneria", "location": "trapani"},
-    {"query": "praticante", "location": "trapani"},
-    {"query": "amministrazione", "location": "trapani"},
-    
-    # Provincia Trapani
-    {"query": "back office", "location": "marsala"},
-    {"query": "amministrativo", "location": "marsala"},
-    {"query": "contabilità", "location": "mazara"},
-    {"query": "ufficio", "location": "alcamo"},
-    {"query": "amministrativo", "location": "castelvetrano"},
-    
-    # Part-time
-    {"query": "part time ufficio", "location": "trapani"},
-    {"query": "part time amministrazione", "location": "trapani"},
-    {"query": "tempo parziale ufficio", "location": "trapani"},
-    
-    # Smart working / Remoto
-    {"query": "smart working amministrativo", "location": "italia"},
-    {"query": "lavoro da casa contabilità", "location": "italia"},
-    {"query": "remoto back office", "location": "italia"},
-    {"query": "telelavoro amministrazione", "location": "italia"},
+    # Trapani e provincia (region=11 = Sicilia, filtriamo per città nella risposta)
+    {"q": "back office",               "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "impiegato amministrativo",  "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "contabilità",               "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "fatturazione ufficio",      "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "segreteria",                "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "ragioneria",                "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "praticante commercialista", "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "amministrazione ufficio",   "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "part time ufficio",         "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "customer service",          "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "addetto contabilità",       "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    # Smart Working Italia (nessun region filter → tutto Italia)
+    {"q": "smart working amministrativo",  "label": "Italia"},
+    {"q": "lavoro da casa contabilità",    "label": "Italia"},
+    {"q": "remoto back office",            "label": "Italia"},
+    {"q": "full remote amministrativo",    "label": "Italia"},
 ]
 
+EXCLUDE_PATTERNS = [
+    "auto ", "moto ", "telefono", "cellulare", "tablet", "iphone", "samsung",
+    "casa in vendita", "appartamento", "affitto",
+    "abbigliamento", "scarpe", "borsa", "borse",
+    "console", "playstation", "xbox", "nintendo",
+    "bici", "cucina", "divano", "letto", "lavatrice",
+    "vendo", "cedo", "regalo",
+]
 
-def _build_subito_url(query: str, location: str) -> str:
-    """
-    Costruisce URL di ricerca Subito.it
-    """
-    q = query.lower().replace(" ", "-")
-    
-    if location == "trapani":
-        return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani"
-    elif location == "marsala":
-        return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani&city=Marsala"
-    elif location == "mazara":
-        return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani&city=Mazara-del-vallo"
-    elif location == "alcamo":
-        return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani&city=Alcamo"
-    elif location == "castelvetrano":
-        return f"https://www.subito.it/annunci-sicilia/vendita/?q={q}&region=Trapani&city=Castelvetrano"
-    elif location == "italia":
-        return f"https://www.subito.it/annunci-italia/vendita/?q={q}"
-    else:
-        return f"https://www.subito.it/annunci-italia/vendita/?q={q}&region=Trapani"
+TARGET_KEYWORDS = [
+    "amministrativo", "contabilità", "back office", "fatturazione", "segreteria",
+    "ufficio", "commercialista", "ragioneria", "contabile", "impiegato",
+    "praticante", "stage", "part-time", "part time", "smart working",
+    "remoto", "bilancio", "lavoro", "addetto", "assistente", "customer service",
+    "amministrazione", "prima nota", "erp",
+]
+
+TRAPANI_CITIES = {
+    "trapani", "marsala", "mazara", "mazara del vallo", "alcamo",
+    "castelvetrano", "erice", "valderice", "paceco", "buseto",
+    "petrosino", "salemi", "partanna", "campobello", "pantelleria",
+    "favignana", "castellammare del golfo", "calatafimi",
+}
 
 
-def _parse_subito_items(html: str, query: str, location: str) -> list[dict]:
-    """Parsa la pagina HTML di Subito e restituisce una lista di annunci."""
-    results = []
-    soup = BeautifulSoup(html, "html.parser")
-    
-    # Subito.it usa varie classi per gli annunci. Cerchiamo i più comuni.
-    items = soup.select("article, div.items__item, a.item__link, [class*='card'], [class*='item-card']")
-    
-    # Se non trova con selettori generici, prova con link
-    if not items:
-        # Cerca i link agli annunci
-        for link in soup.find_all("a", href=re.compile(r"/annunci-.*/vendita/")):
-            title_tag = link.find("h2") or link.find("h3") or link.find("p", class_=re.compile(r"title"))
-            price_tag = link.find("p", class_=re.compile(r"price")) or link.find("span", class_=re.compile(r"price"))
-            location_tag = link.find("p", class_=re.compile(r"location")) or link.find("span", class_=re.compile(r"location"))
-            
-            title = title_tag.get_text(strip=True) if title_tag else ""
-            price = price_tag.get_text(strip=True) if price_tag else ""
-            loc_text = location_tag.get_text(strip=True) if location_tag else location
-            
-            href = link.get("href", "")
-            if href and not href.startswith("http"):
-                href = f"https://www.subito.it{href}" if href.startswith("/") else href
-            
-            if title and len(title) > 5:
-                results.append({
-                    "title": title,
-                    "company": "Subito.it",
-                    "location": loc_text,
-                    "search_country": "Trapani" if location != "italia" else "Italia",
-                    "job_url": href,
-                    "official_url": href,
-                    "description": f"Subito.it | query: {query} | {price}",
-                    "site": "subito.it",
-                    "source_type": "subito",
-                    "date_posted": datetime.now().strftime("%Y-%m-%d"),
-                })
-    
-    return results
+def _parse_location(ad: dict, fallback_label: str) -> tuple[str, str]:
+    """Estrae città e search_country dall'annuncio Subito."""
+    geo = ad.get("geo", {})
+    city_obj = geo.get("city", {})
+    region_obj = geo.get("region", {})
+    town_obj = geo.get("town", {})
+
+    city = (
+        city_obj.get("value", "")
+        or town_obj.get("value", "")
+        or region_obj.get("value", "")
+        or fallback_label
+    )
+
+    city_lower = city.lower()
+    if any(tp in city_lower for tp in TRAPANI_CITIES):
+        return city, "Trapani"
+    if "sicilia" in city_lower or region_obj.get("short_name", "").upper() in (
+        "AG", "CL", "CT", "EN", "ME", "PA", "RG", "SR", "TP"
+    ):
+        return city, "Sicilia"
+    return city, fallback_label
 
 
 def scrape_subito() -> pd.DataFrame:
     """
-    Scraping principale di Subito.it per Trapani e provincia.
+    Scraping Subito.it via API JSON ufficiale.
+    Nessun HTML parsing, nessun Cloudflare, nessun 403.
     """
-    logger.info("=== SCRAPING SUBITO.IT (Trapani e provincia) ===")
+    logger.info("=== SCRAPING SUBITO.IT (API JSON hades.subito.it) ===")
     all_results = []
-    
+
     for search in SUBITO_SEARCHES:
-        query = search["query"]
-        location = search["location"]
-        url = _build_subito_url(query, location)
-        
-        logger.info(f"Subito: '{query}' in {location}")
-        
-        try:
-            response = session.get(url, headers=HEADERS, timeout=20)
-            if response.status_code == 200:
-                items = _parse_subito_items(response.text, query, location)
-                for item in items:
-                    # Controllo base: escludere se contiene keyword di altri settori
-                    title_lower = item["title"].lower()
-                    exclude_patterns = [
-                        "auto", "moto", "telefono", "cellulare", "tablet",
-                        "casa", "appartamento", "affitto", "vendita casa",
-                        "abbigliamento", "scarpe", "borsa",
-                        "console", "playstation", "xbox",
-                    ]
-                    if any(p in title_lower for p in exclude_patterns):
+        q = search["q"]
+        label = search.get("label", "Italia")
+
+        params: dict = {
+            "q": q,
+            "category": SUBITO_CATEGORY,
+            "start": 0,
+            "lim": 25,
+            "sort": "date",
+        }
+        if "region" in search:
+            params["region"] = search["region"]
+
+        logger.info(f"Subito API: '{q}' [{label}]")
+
+        for attempt in range(2):          # max 2 tentativi per query
+            try:
+                resp = requests.get(
+                    SUBITO_API,
+                    params=params,
+                    headers=HEADERS,
+                    timeout=25,
+                )
+
+                if resp.status_code == 429:
+                    logger.warning("  -> Rate limit Subito API (429), attendo 10s...")
+                    time.sleep(10)
+                    continue
+
+                if resp.status_code != 200:
+                    logger.warning(f"  -> HTTP {resp.status_code}")
+                    break
+
+                data = resp.json()
+                ads = data.get("ads", [])
+
+                if not ads:
+                    logger.info("  -> 0 annunci")
+                    break
+
+                count = 0
+                for ad in ads:
+                    title = str(ad.get("subject", "")).strip()
+                    if not title or len(title) < 5:
                         continue
-                    
-                    all_results.append(item)
-                
-                logger.info(f"  -> {len(items)} annunci trovati")
-            else:
-                logger.warning(f"  -> HTTP {response.status_code}")
-                
-        except Exception as exc:
-            logger.warning(f"  -> Errore Subito: {exc}")
-        
-        time.sleep(2)  ## Delay per non essere bloccati
-    
+
+                    title_lower = title.lower()
+
+                    # Escludi annunci non lavorativi
+                    if any(p in title_lower for p in EXCLUDE_PATTERNS):
+                        continue
+
+                    # Includi solo annunci con keyword rilevanti
+                    body = str(ad.get("body", "")).strip()
+                    full_text = f"{title} {body}".lower()
+                    if not any(kw in full_text for kw in TARGET_KEYWORDS):
+                        continue
+
+                    # URL
+                    urls = ad.get("urls", {})
+                    job_url = urls.get("default", "") or ad.get("url", "")
+
+                    # Azienda
+                    advertiser = ad.get("advertiser", {})
+                    company = (
+                        advertiser.get("company_name")
+                        or advertiser.get("name")
+                        or ""
+                    )
+                    if not company:
+                        company = "Subito.it"
+
+                    # Località
+                    city, search_country = _parse_location(ad, label)
+
+                    # Data
+                    dates = ad.get("dates", {})
+                    raw_date = (
+                        dates.get("publication_date", "")
+                        or dates.get("expiration_date", "")
+                    )
+                    try:
+                        date_str = raw_date[:10] if raw_date else datetime.now().strftime("%Y-%m-%d")
+                    except Exception:
+                        date_str = datetime.now().strftime("%Y-%m-%d")
+
+                    all_results.append({
+                        "title": title[:250],
+                        "company": str(company)[:150],
+                        "location": city,
+                        "search_country": search_country,
+                        "job_url": job_url,
+                        "official_url": job_url,
+                        "description": f"Subito.it | {body[:400]}",
+                        "site": "subito.it",
+                        "source_type": "subito",
+                        "date_posted": date_str,
+                    })
+                    count += 1
+
+                logger.info(f"  -> {count} annunci rilevanti (di {len(ads)} totali)")
+                break   # successo, esci dal loop di retry
+
+            except requests.exceptions.ConnectionError as exc:
+                logger.warning(f"  -> Connessione fallita: {exc}")
+                break
+            except Exception as exc:
+                logger.warning(f"  -> Errore Subito API (tentativo {attempt + 1}): {exc}")
+                time.sleep(3)
+
+        time.sleep(1.5)
+
     if not all_results:
-        logger.info("Nessun annuncio trovato su Subito.it")
+        logger.info("Nessun annuncio trovato su Subito.it via API")
         return pd.DataFrame()
-    
+
     df = pd.DataFrame(all_results)
-    df = df.drop_duplicates(subset=["title", "location", "job_url"])
-    logger.info(f"Subito.it: totale {len(df)} annunci unici")
+    df = df[df["job_url"].str.strip() != ""]
+    df = df.drop_duplicates(subset=["job_url"], keep="first")
+    logger.info(f"Subito.it API: {len(df)} annunci unici")
     return df

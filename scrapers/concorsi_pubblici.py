@@ -1,17 +1,21 @@
 """
 Scraper per Concorsi Pubblici — PA, Enti Locali, Sicilia
 CERCA SPECIFICAMENTE concorsi accessibili con DIPLOMA RAGIONERIA AFM.
-Controlla:
-- Categoria C e D (accessibili con diploma)
-- Profili amministrativi / contabili
-- Istruttore amministrativo, funzionario amministrativo (categoria D)
-- NESSUN concorso che richiede laurea
+
+Fonti:
+- inPA (RSS feed ufficiale — molto più affidabile dello scraping HTML)
+- FunzionePubblica.gov.it (RSS/scraping)
+- concorsi.it (URL corretto 2025)
+- Gazzetta Ufficiale
+- Agenzia delle Entrate
+- Comune Trapani (SSL bypass)
 """
 
 import logging
 import re
 import time
 from datetime import datetime
+from xml.etree import ElementTree as ET
 
 import pandas as pd
 import requests
@@ -28,8 +32,8 @@ HEADERS = {
     "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
 }
 
-# --- KEYWORD PER CONCORSI ADATTI A DIPLOMA RAGIONERIA ---
-# Titoli di studio richiesti per accesso
+# ─── KEYWORD PER CONCORSI ADATTI A DIPLOMA RAGIONERIA ────────────────────────
+
 TITOLI_RAGIONERIA = [
     "ragioneria", "perito commerciale", "afm", "amministrazione finanza marketing",
     "istituto tecnico commerciale", "istituto tecnico economico", "itc",
@@ -38,7 +42,6 @@ TITOLI_RAGIONERIA = [
     "diploma di scuola media superiore",
 ]
 
-# Categorie e profili accessibili con diploma
 CATEGORIE_DIPLOMA = [
     "categoria c", "cat. c", "cat c", "categoria d", "cat. d", "cat d",
     "istruttore", "istruttore amministrativo", "istruttore contabile",
@@ -51,7 +54,6 @@ CATEGORIE_DIPLOMA = [
     "esecutore amministrativo", "esecutore contabile",
 ]
 
-# Profili specifici ragioneria
 PROFILI_RAGIONERIA = [
     "ragioneria", "contabile", "bilancio", "partita doppia", "iva",
     "imposte", "tributi", "economato", "economico finanziario",
@@ -60,7 +62,6 @@ PROFILI_RAGIONERIA = [
     "contabilità pubblica", "ragioneria comunale", "ragioneria provinciale",
 ]
 
-# Esclusioni: concorsi NON accessibili con diploma
 ESCLUSIONI = [
     "laurea", "laurea magistrale", "laurea triennale", "laurea specialistica",
     "dottorato", "phd", "master universitario",
@@ -75,7 +76,6 @@ ESCLUSIONI = [
     "dirigente", "dirigente amministrativo",
 ]
 
-# Requisiti specifici per diploma
 REQUISITI_DIPLOMA = [
     "diploma di ragioneria", "diploma di perito commerciale",
     "diploma di istituto tecnico commerciale", "diploma afm",
@@ -88,281 +88,391 @@ REQUISITI_DIPLOMA = [
     "è richiesto il diploma",
 ]
 
-# --- SITI CONCORSI DA MONITORARE CON URL SPECIFICI PER DIPLOMATI ---
+# ─── SITI CONCORSI — URL aggiornati e funzionanti ────────────────────────────
 CONCORSI_SITES_SPECIFIC = [
     {
         "name": "inPA - Categoria C",
         "url": "https://www.inpa.gov.it/bandi-e-avvisi/?q=categoria+C+istruttore+amministrativo",
         "query": "categoria C istruttore amministrativo",
-        "site": "inpa.gov.it"
+        "site": "inpa.gov.it",
+        "use_rss": False,
     },
     {
         "name": "inPA - Categoria D",
         "url": "https://www.inpa.gov.it/bandi-e-avvisi/?q=funzionario+amministrativo+diploma",
         "query": "funzionario amministrativo diploma",
-        "site": "inpa.gov.it"
-    },
-    {
-        "name": "inPA - Ragioneria",
-        "url": "https://www.inpa.gov.it/bandi-e-avvisi/?q=ragioneria+contabile+amministrativo",
-        "query": "ragioneria contabile amministrativo",
-        "site": "inpa.gov.it"
+        "site": "inpa.gov.it",
+        "use_rss": False,
     },
     {
         "name": "inPA - Trapani",
         "url": "https://www.inpa.gov.it/bandi-e-avvisi/?q=Trapani+istruttore+amministrativo",
         "query": "Trapani istruttore amministrativo",
-        "site": "inpa.gov.it"
+        "site": "inpa.gov.it",
+        "use_rss": False,
     },
     {
         "name": "inPA - Sicilia diplomati",
         "url": "https://www.inpa.gov.it/bandi-e-avvisi/?q=Sicilia+diplomati+categoria+C",
         "query": "Sicilia diplomati categoria C",
-        "site": "inpa.gov.it"
+        "site": "inpa.gov.it",
+        "use_rss": False,
     },
     {
-        "name": "Concorsi.it - Categoria C",
-        "url": "https://www.concorsi.it/ricerca?keyword=categoria+C+istruttore+amministrativo&area_geografica=Sicilia",
+        # URL corretto 2025 per concorsi.it (endpoint search aggiornato)
+        "name": "Concorsi.it - Categoria C Sicilia",
+        "url": "https://www.concorsi.it/cerca?q=categoria+C+istruttore+amministrativo+Sicilia",
         "query": "categoria C istruttore amministrativo Sicilia",
-        "site": "concorsi.it"
+        "site": "concorsi.it",
+        "use_rss": False,
     },
     {
         "name": "Concorsi.it - Diplomati",
-        "url": "https://www.concorsi.it/ricerca?keyword=diplomati+ragioneria+amministrativo",
+        "url": "https://www.concorsi.it/cerca?q=diplomati+ragioneria+amministrativo",
         "query": "diplomati ragioneria amministrativo",
-        "site": "concorsi.it"
-    },
-    {
-        "name": "Sicilia Concorsi - Categoria C",
-        "url": "https://www.siciliaconcorsi.it/ricerca/?q=categoria+c+istruttore",
-        "query": "categoria c istruttore",
-        "site": "siciliaconcorsi.it"
-    },
-    {
-        "name": "Sicilia Concorsi - Diplomati",
-        "url": "https://www.siciliaconcorsi.it/ricerca/?q=diplomati+ragioneria",
-        "query": "diplomati ragioneria",
-        "site": "siciliaconcorsi.it"
-    },
-    {
-        "name": "ASL Trapani - Concorsi",
-        "url": "https://www.asptrapani.it/concorsi/",
-        "query": "concorsi diplomati amministrativi",
-        "site": "asptrapani.it"
+        "site": "concorsi.it",
+        "use_rss": False,
     },
     {
         "name": "Gazzetta Ufficiale - Concorsi",
         "url": "https://www.gazzettaufficiale.it/concorsi/cerca",
         "query": "diploma istituto tecnico commerciale",
-        "site": "gazzettaufficiale.it"
+        "site": "gazzettaufficiale.it",
+        "use_rss": False,
     },
     {
         "name": "Agenzia Entrate - Concorsi",
         "url": "https://www.agenziaentrate.gov.it/wps/content/Nsilib/Nsi/Concorsi/",
         "query": "diplomati funzionario amministrativo",
-        "site": "agenziaentrate.gov.it"
+        "site": "agenziaentrate.gov.it",
+        "use_rss": False,
     },
     {
+        # INPS — URL corretto 2025
         "name": "INPS Concorsi",
-        "url": "https://www.inps.it/it/it/concorsi.html",
+        "url": "https://www.inps.it/concorsi",
         "query": "diplomati istruttore amministrativo INPS",
-        "site": "inps.it"
+        "site": "inps.it",
+        "use_rss": False,
     },
     {
-        "name": "Regione Sicilia - Concorsi",
-        "url": "https://pit.regione.sicilia.it/concorsi/",
-        "query": "diplomati categoria C Regione Sicilia",
-        "site": "regione.sicilia.it"
+        # Funzione Pubblica — portale ufficiale bandi PA
+        "name": "FunzionePubblica - Bandi",
+        "url": "https://www.funzionepubblica.gov.it/concorsi",
+        "query": "istruttore amministrativo diploma",
+        "site": "funzionepubblica.gov.it",
+        "use_rss": False,
     },
     {
+        # Comune Trapani — SSL bypass (certificato con hostname mismatch)
         "name": "Comune Trapani - Bandi",
-        "url": "https://www.comune.trapani.it/bandi-di-concorso/",
+        "url": "https://comune.trapani.it/bandi-di-concorso/",
         "query": "concorso diplomati istruzione pubblica Trapani",
-        "site": "comune.trapani.it"
+        "site": "comune.trapani.it",
+        "use_rss": False,
+        "ssl_verify": False,
+    },
+    {
+        # ASL Trapani — URL corretto senza /concorsi/ (404)
+        "name": "ASP Trapani - Avvisi",
+        "url": "https://www.asptrapani.it/wp-json/wp/v2/posts?categories=concorsi&per_page=20",
+        "query": "concorsi diplomati amministrativi ASP Trapani",
+        "site": "asptrapani.it",
+        "use_rss": False,
+        "is_json": True,
     },
     {
         "name": "InPA - Part-time PA",
         "url": "https://www.inpa.gov.it/bandi-e-avvisi/?q=part+time+diplomati+amministrativo",
         "query": "part time diplomati amministrativo",
-        "site": "inpa.gov.it"
+        "site": "inpa.gov.it",
+        "use_rss": False,
+    },
+]
+
+# ─── RSS FEEDS — Molto più affidabili dello scraping HTML ────────────────────
+RSS_FEEDS = [
+    {
+        "name": "inPA RSS — Bandi e Avvisi",
+        "url": "https://www.inpa.gov.it/feed/bandi-e-avvisi/",
+        "site": "inpa.gov.it",
+    },
+    {
+        "name": "FunzionePubblica RSS",
+        "url": "https://www.funzionepubblica.gov.it/feed/concorsi",
+        "site": "funzionepubblica.gov.it",
+    },
+    {
+        "name": "GazzettaUfficiale RSS Concorsi",
+        "url": "https://www.gazzettaufficiale.it/rss/quarta_serie_speciale.xml",
+        "site": "gazzettaufficiale.it",
     },
 ]
 
 
+# ─── Logica di compatibilità con diploma ─────────────────────────────────────
+
 def _check_diploma_compatibile(title: str, full_text: str) -> tuple[bool, str]:
     """
-    Verifica se un concorso è ACCESSIBILE con DIPLOMA RAGIONERIA AFM.
+    Verifica se un concorso è accessibile con DIPLOMA RAGIONERIA AFM.
     Restituisce (compatibile, motivazione).
     """
     text = f"{title} {full_text}".lower()
-    
-    # 1. ESCLUDI se richiede LAUREA
-    # Pattern: "laurea ... richiesta", "titolo di studio: laurea", "laurea in ..."
-    if re.search(r"\blaurea\b.{0,40}\b(richiest[ao]|necessari[ao]|obbligatori[ao]|indispensabile|requisito)\b", text):
-        return (False, "richiede_laurea")
-    
-    # Se dice "laurea triennale" o "laurea magistrale" senza eccezioni
-    if re.search(r"\blaurea\s*(triennale|magistrale|specialistica)\b", text):
-        return (False, "richiede_laurea_triennale_magistrale")
-    
-    # "titolo di studio: laurea" (non seguito da "o diploma")
-    if re.search(r"titolo\s+di\s+studio\s*[:;]\s*laurea\b", text) and not re.search(r"titolo\s+di\s+studio\s*[:;].{0,30}(diploma|maturità)", text):
-        return (False, "titolo_di_studio_laurea")
-    
-    # 2. VERIFICA se il concorso è per diploma
-    # Cerca "categoria C" o "categoria D" (tipiche per diplomati)
-    cat_c_d = re.search(r"\bcategoria\s*[cd]\b|\bcat\.?\s*[cd]\b", text)
-    
-    # Cerca profili specifici ragioneria
-    profilo_ragioneria = any(p in text for p in PROFILI_RAGIONERIA)
-    
-    # Cerca "istruttore amministrativo" e simili
-    profilo_amm = any(p in text for p in CATEGORIE_DIPLOMA)
-    
-    # Cerca titolo di studio richiesto: diploma
-    richiede_diploma = any(t in text for t in REQUISITI_DIPLOMA)
-    
-    # Cerca esclusioni
-    escluso = any(e in text for e in ESCLUSIONI)
-    if escluso:
-        return (False, "ruolo_escluso")
-    
-    # 3. DECISIONE
-    if cat_c_d and not escluso:
-        return (True, "categoria_C_D_diploma")
-    
-    if (profilo_ragioneria or profilo_amm) and not escluso and not re.search(r"\blaurea\b", text):
-        return (True, "profilo_amministrativo")
-    
-    if richiede_diploma and not escluso and not re.search(r"\blaurea\b", text):
-        return (True, "richiede_diploma")
-    
-    # Se non c'è menzione né di laurea né di diploma né di categoria C/D
-    # ma il titolo sembra amministrativo e non esclude diplomati
-    if not escluso and not re.search(r"\blaurea\b", text) and not re.search(r"\bdottorato\b|\bphd\b", text):
-        if any(t in text for t in ["amministrativo", "contabile", "ragioneria", "bilancio", "tributi", "imposte", "economato"]):
-            return (True, "probabile_per_diplomati")
-    
-    return (False, "non_chiaro_o_non_compatibile")
 
+    if re.search(r"\blaurea\b.{0,40}\b(richiest[ao]|necessari[ao]|obbligatori[ao]|indispensabile|requisito)\b", text):
+        return False, "richiede_laurea"
+
+    if re.search(r"\blaurea\s*(triennale|magistrale|specialistica)\b", text):
+        return False, "richiede_laurea_tipo"
+
+    if re.search(r"titolo\s+di\s+studio\s*[:;]\s*laurea\b", text) and not re.search(
+        r"titolo\s+di\s+studio\s*[:;].{0,30}(diploma|maturità)", text
+    ):
+        return False, "titolo_laurea"
+
+    cat_c_d = re.search(r"\bcategoria\s*[cd]\b|\bcat\.?\s*[cd]\b", text)
+    profilo_ragioneria = any(p in text for p in PROFILI_RAGIONERIA)
+    profilo_amm = any(p in text for p in CATEGORIE_DIPLOMA)
+    richiede_diploma = any(t in text for t in REQUISITI_DIPLOMA)
+    escluso = any(e in text for e in ESCLUSIONI)
+
+    if escluso:
+        return False, "ruolo_escluso"
+
+    if cat_c_d:
+        return True, "categoria_C_D_diploma"
+
+    if (profilo_ragioneria or profilo_amm) and not re.search(r"\blaurea\b", text):
+        return True, "profilo_amministrativo"
+
+    if richiede_diploma and not re.search(r"\blaurea\b", text):
+        return True, "richiede_diploma"
+
+    if not re.search(r"\blaurea\b|\bdottorato\b|\bphd\b", text):
+        if any(t in text for t in ["amministrativo", "contabile", "ragioneria", "bilancio", "tributi"]):
+            return True, "probabile_per_diplomati"
+
+    return False, "non_compatibile"
+
+
+def _guess_location(full_text: str) -> tuple[str, str]:
+    """Estrae città e search_country da un testo libero."""
+    text = full_text.lower()
+    for city in ["trapani", "palermo", "catania", "messina", "siracusa", "ragusa",
+                 "agrigento", "enna", "caltanissetta"]:
+        if city in text:
+            return city.title(), "Sicilia"
+    if "sicilia" in text:
+        return "Sicilia", "Sicilia"
+    return "Italia", "Italia"
+
+
+# ─── Parsing RSS ──────────────────────────────────────────────────────────────
+
+def _scrape_rss_feed(feed_cfg: dict) -> list[dict]:
+    """Parsa un RSS feed di concorsi pubblici."""
+    results = []
+    try:
+        resp = requests.get(feed_cfg["url"], headers=HEADERS, timeout=20)
+        if resp.status_code != 200:
+            logger.warning(f"  RSS {feed_cfg['name']}: HTTP {resp.status_code}")
+            return []
+
+        try:
+            root = ET.fromstring(resp.content)
+        except ET.ParseError as e:
+            logger.warning(f"  RSS {feed_cfg['name']}: XML parse error: {e}")
+            return []
+
+        # Namespace per Atom e RSS
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+
+        # RSS 2.0 items
+        items = root.findall(".//item")
+        # Atom feed entries
+        if not items:
+            items = root.findall(".//atom:entry", ns) or root.findall(".//entry")
+
+        for item in items:
+            # Titolo
+            title_el = (item.find("title") or item.find("atom:title", ns))
+            title = title_el.text.strip() if title_el is not None and title_el.text else ""
+            if not title or len(title) < 10:
+                continue
+
+            # Descrizione
+            desc_el = (
+                item.find("description")
+                or item.find("summary")
+                or item.find("content")
+                or item.find("atom:summary", ns)
+            )
+            description = desc_el.text.strip() if desc_el is not None and desc_el.text else ""
+
+            # URL
+            link_el = item.find("link")
+            if link_el is not None:
+                href = (link_el.text or "").strip()
+                if not href:
+                    href = link_el.get("href", "")
+            else:
+                href = ""
+
+            full_text = f"{title} {description}"
+            compatible, reason = _check_diploma_compatibile(title, description)
+            if not compatible:
+                continue
+
+            location, search_country = _guess_location(full_text)
+
+            # Data
+            date_el = item.find("pubDate") or item.find("updated") or item.find("published")
+            date_str = date_el.text.strip() if date_el is not None and date_el.text else ""
+            try:
+                from email.utils import parsedate_to_datetime
+                date_str = parsedate_to_datetime(date_str).strftime("%Y-%m-%d")
+            except Exception:
+                date_str = datetime.now().strftime("%Y-%m-%d")
+
+            results.append({
+                "title": title[:300],
+                "company": feed_cfg["name"],
+                "location": location,
+                "search_country": search_country,
+                "job_url": href or feed_cfg["url"],
+                "official_url": href or feed_cfg["url"],
+                "description": f"Concorso Pubblico | {feed_cfg['name']} | Diploma OK ({reason}) | {description[:300]}",
+                "site": feed_cfg["site"],
+                "source_type": "concorso_pubblico",
+                "date_posted": date_str,
+                "concorso_motivo": reason,
+            })
+
+        logger.info(f"  RSS {feed_cfg['name']}: {len(results)} concorsi compatibili")
+
+    except Exception as exc:
+        logger.warning(f"  RSS {feed_cfg['name']}: errore: {exc}")
+
+    return results
+
+
+# ─── Parsing HTML ─────────────────────────────────────────────────────────────
 
 def _parse_concorso_element(el, base_url: str, site_name: str, query: str) -> dict | None:
-    """
-    Estrae informazioni da un elemento HTML di un concorso.
-    """
-    # Estrai titolo
-    title_el = el.find(["h2", "h3", "h4", "a", "p", "span", "strong"], class_=re.compile(r"title|titolo|name|nome|heading"))
+    """Estrae informazioni da un elemento HTML di un concorso."""
+    title_el = el.find(
+        ["h2", "h3", "h4", "a", "p", "span", "strong"],
+        class_=re.compile(r"title|titolo|name|nome|heading", re.I),
+    )
     if not title_el:
         title_el = el.find(["a", "h2", "h3", "h4"])
     if not title_el:
         return None
-    
+
     title = title_el.get_text(" ", strip=True)
     if not title or len(title) < 15:
-        # Prova con tutto il testo dell'elemento
         title = el.get_text(" ", strip=True)
         if not title or len(title) < 15:
             return None
-    
-    # Estrai link
+
     link = el if el.name == "a" and el.get("href") else el.find("a", href=True)
     href = ""
     if link and hasattr(link, "get"):
         href = link.get("href", "")
         if href and not href.startswith("http"):
             if href.startswith("/"):
-                # Estrai dominio base
                 from urllib.parse import urlparse
                 parsed = urlparse(base_url)
                 href = f"{parsed.scheme}://{parsed.netloc}{href}"
             else:
                 href = f"{base_url.rstrip('/')}/{href.lstrip('/')}"
-    
-    # Testo completo dell'elemento per analisi
+
     full_text = el.get_text(" ", strip=True)
-    
-    # Verifica compatibilità con diploma ragioneria
-    compatibile, motivo = _check_diploma_compatibile(title, full_text)
-    if not compatibile:
+    compatible, reason = _check_diploma_compatibile(title, full_text)
+    if not compatible:
         return None
-    
-    # Estrai località
-    location_guess = "Italia"
-    full_lower = full_text.lower()
-    
-    # Cerca città siciliane / Trapani
-    for city in ["trapani", "palermo", "catania", "messina", "siracusa", "ragusa", "agrigento", "enna", "caltanissetta"]:
-        if city in full_lower:
-            location_guess = city.title()
-            break
-    
-    if location_guess == "Italia" and "sicilia" in full_lower:
-        location_guess = "Sicilia"
-    if location_guess == "Italia":
-        # Cerca città italiane non siciliane
-        italian_cities = ["roma", "milano", "napoli", "torino", "bari", "firenze", "bologna", "venezia", "genova", "verona", "padova", "trieste", "perugia", "l'aquila", "cagliari", "ancona", "potenza", "campobasso"]
-        for city in italian_cities:
-            if city in full_lower:
-                location_guess = city.title()
-                break
-    
-    # Determina la zona per il report
-    if location_guess in ["Trapani", "Palermo", "Catania", "Messina", "Siracusa", "Ragusa", "Agrigento", "Enna", "Caltanissetta"]:
-        search_country = "Sicilia"
-    elif location_guess in ["Roma", "Milano", "Napoli"]:
-        search_country = "Italia"
-    else:
-        search_country = "Italia"
-    
-    # Estrai ente
+
+    location, search_country = _guess_location(full_text)
+
     ente = site_name
-    ente_match = re.search(r"(comune|provincia|regione|asl|inps|agenzia|ministero|azienda sanitaria|consiglio|autorità|camera|corte)\s+(?:di\s+|della\s+|dell[' ])?([a-zàèéìòù\s]+?)(?:\s|,|\.|–|-|$)", full_lower)
+    ente_match = re.search(
+        r"(comune|provincia|regione|asl|asp|inps|agenzia|ministero|azienda sanitaria|corte|autorità)"
+        r"\s+(?:di\s+|della\s+|dell[' ])?([a-zàèéìòù\s]+?)(?:\s|,|\.|–|-|$)",
+        full_text.lower(),
+    )
     if ente_match:
         ente = f"{ente_match.group(1).title()} {ente_match.group(2).title()}".strip()
-    
+
     return {
         "title": title[:300],
         "company": ente,
-        "location": location_guess,
+        "location": location,
         "search_country": search_country,
         "job_url": href or base_url,
         "official_url": href or base_url,
-        "description": f"Concorso Pubblico | {site_name} | compatibile: diploma ragioneria AFM | {full_text[:300]}",
+        "description": (
+            f"Concorso Pubblico | {site_name} | Diploma OK ({reason}) | {full_text[:300]}"
+        ),
         "site": base_url.replace("https://", "").replace("http://", "").split("/")[0],
         "source_type": "concorso_pubblico",
         "date_posted": datetime.now().strftime("%Y-%m-%d"),
-        "concorso_motivo": motivo,
+        "concorso_motivo": reason,
     }
 
 
-def scrape_concorsi() -> pd.DataFrame:
-    """
-    Scraping dei principali portali di concorsi pubblici.
-    CERCA SOLO CONCORSI ACCESSIBILI CON DIPLOMA RAGIONERIA AFM.
-    """
-    logger.info("=" * 60)
-    logger.info("SCRAPING CONCORSI PUBBLICI — Solo per Diplomati Ragioneria AFM")
-    logger.info("=" * 60)
-    
-    all_results = []
-    
-    for site_cfg in CONCORSI_SITES_SPECIFIC:
-        site_name = site_cfg["name"]
-        url = site_cfg["url"]
-        query = site_cfg.get("query", "")
-        
-        logger.info(f"🔍 {site_name}: {query}")
-        
-        try:
-            response = requests.get(url, headers=HEADERS, timeout=25)
-            if response.status_code != 200:
-                logger.warning(f"  ❌ HTTP {response.status_code}")
-                continue
-            
-            soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Cerca elementi che sembrano bandi/concorsi
-            # Prova vari selettori CSS comuni
+def _scrape_html_site(site_cfg: dict) -> list[dict]:
+    """Scraping HTML di un sito concorsi."""
+    results = []
+    site_name = site_cfg["name"]
+    url = site_cfg["url"]
+    ssl_verify = site_cfg.get("ssl_verify", True)
+
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=25, verify=ssl_verify)
+        if resp.status_code != 200:
+            logger.warning(f"  ❌ {site_name}: HTTP {resp.status_code}")
+            return []
+
+        # Se è una risposta JSON (es. WP REST API)
+        if site_cfg.get("is_json"):
+            try:
+                data = resp.json()
+                for post in (data if isinstance(data, list) else []):
+                    title = post.get("title", {}).get("rendered", "")
+                    body = BeautifulSoup(
+                        post.get("content", {}).get("rendered", ""), "html.parser"
+                    ).get_text(" ")
+                    link = post.get("link", url)
+                    compatible, reason = _check_diploma_compatibile(title, body)
+                    if compatible:
+                        location, sc = _guess_location(f"{title} {body}")
+                        results.append({
+                            "title": title[:300],
+                            "company": site_name,
+                            "location": location,
+                            "search_country": sc,
+                            "job_url": link,
+                            "official_url": link,
+                            "description": f"Concorso | {site_name} | {body[:300]}",
+                            "site": site_cfg["site"],
+                            "source_type": "concorso_pubblico",
+                            "date_posted": datetime.now().strftime("%Y-%m-%d"),
+                            "concorso_motivo": reason,
+                        })
+                return results
+            except Exception:
+                pass
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Selettori specifici per inPA
+        if "inpa.gov.it" in url:
+            selectors = [
+                ".bandi-avvisi-item", ".single-bandi-container",
+                "article.bando", "div.bando-item", "li.bando",
+                "div[class*='bandi']", "article",
+            ]
+        else:
             selectors = [
                 "a[href*='bando']", "a[href*='concorso']", "a[href*='avviso']",
                 "div[class*='bando']", "div[class*='concorso']", "div[class*='avviso']",
@@ -372,63 +482,104 @@ def scrape_concorsi() -> pd.DataFrame:
                 "div[class*='risultato']", "div[class*='result']",
                 "table tr", ".listing tr",
             ]
-            
-            found_elements = []
-            for selector in selectors:
-                elements = soup.select(selector)
-                if elements:
-                    found_elements = elements
-                    logger.info(f"  📦 Selettore '{selector}': {len(elements)} elementi")
-                    break
-            
-            if not found_elements:
-                # Fallback: cerca tutti i link
-                found_elements = soup.find_all("a", href=True)
-                logger.info(f"  📦 Fallback: {len(found_elements)} link totali")
-            
-            batch_results = []
-            for el in found_elements:
-                parsed = _parse_concorso_element(el, url, site_name, query)
-                if parsed:
-                    batch_results.append(parsed)
-            
-            # Deduplica per titolo + url
-            seen_keys = set()
-            unique_results = []
-            for item in batch_results:
-                key = f"{item['title'][:100]}|{item['job_url']}"
-                if key not in seen_keys:
-                    seen_keys.add(key)
-                    unique_results.append(item)
-            
-            all_results.extend(unique_results)
-            logger.info(f"  ✅ {len(unique_results)} concorsi compatibili con Diploma Ragioneria AFM")
-            
-        except Exception as exc:
-            logger.warning(f"  ❌ Errore {site_name}: {exc}")
-        
+
+        found_elements = []
+        for selector in selectors:
+            elements = soup.select(selector)
+            if elements and len(elements) > 1:  # Ignora se solo 1 (nav link)
+                found_elements = elements
+                logger.info(f"  📦 {site_name}: selettore '{selector}': {len(elements)} elementi")
+                break
+
+        if not found_elements:
+            # Fallback: cerca link con parole chiave di concorso nell'href/testo
+            found_elements = [
+                a for a in soup.find_all("a", href=True)
+                if any(kw in (a.get("href", "") + a.get_text()).lower()
+                       for kw in ["bando", "concorso", "avviso", "selezione", "istruttore"])
+            ]
+            if found_elements:
+                logger.info(f"  📦 {site_name}: fallback link: {len(found_elements)}")
+
+        for el in found_elements[:50]:  # max 50 elementi per sito
+            parsed = _parse_concorso_element(el, url, site_name, site_cfg.get("query", ""))
+            if parsed:
+                results.append(parsed)
+
+    except requests.exceptions.SSLError as exc:
+        logger.warning(f"  ❌ {site_name}: SSL error — {exc}. Riprovo con verify=False...")
+        try:
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            resp = requests.get(url, headers=HEADERS, timeout=25, verify=False)
+            if resp.status_code == 200:
+                return _scrape_html_site({**site_cfg, "ssl_verify": False})
+        except Exception as exc2:
+            logger.warning(f"  ❌ {site_name}: fallback SSL anche fallito: {exc2}")
+    except requests.exceptions.ConnectionError as exc:
+        logger.warning(f"  ❌ {site_name}: DNS/connessione fallita — {exc}")
+    except Exception as exc:
+        logger.warning(f"  ❌ {site_name}: errore: {exc}")
+
+    return results
+
+
+# ─── Entry point ─────────────────────────────────────────────────────────────
+
+def scrape_concorsi() -> pd.DataFrame:
+    """
+    Scraping dei principali portali di concorsi pubblici.
+    Usa RSS feed quando disponibile (più affidabile), HTML come fallback.
+    """
+    logger.info("=" * 60)
+    logger.info("SCRAPING CONCORSI PUBBLICI — Solo per Diplomati Ragioneria AFM")
+    logger.info("=" * 60)
+
+    all_results: list[dict] = []
+
+    # ── 1. RSS Feeds (più affidabili, nessun JS rendering) ────────────────────
+    logger.info("📡 Parsing RSS feed concorsi...")
+    for feed_cfg in RSS_FEEDS:
+        logger.info(f"🔍 RSS: {feed_cfg['name']}")
+        results = _scrape_rss_feed(feed_cfg)
+        all_results.extend(results)
+        time.sleep(1.5)
+
+    # ── 2. Scraping HTML siti specifici ───────────────────────────────────────
+    logger.info("🌐 Scraping HTML siti concorsi...")
+    for site_cfg in CONCORSI_SITES_SPECIFIC:
+        logger.info(f"🔍 {site_cfg['name']}: {site_cfg.get('query', '')}")
+        results = _scrape_html_site(site_cfg)
+
+        # Deduplica locale per sito
+        seen = set()
+        unique = []
+        for item in results:
+            key = f"{item['title'][:80]}|{item['job_url']}"
+            if key not in seen:
+                seen.add(key)
+                unique.append(item)
+
+        all_results.extend(unique)
+        logger.info(f"  ✅ {len(unique)} concorsi compatibili con Diploma Ragioneria AFM")
         time.sleep(2)
-    
+
+    # ── 3. Deduplicazione finale ──────────────────────────────────────────────
     if not all_results:
         logger.info("⚠️ Nessun concorso pubblico trovato per Diploma Ragioneria AFM")
         return pd.DataFrame()
-    
+
     df = pd.DataFrame(all_results)
-    # Deduplica finale
     df = df.drop_duplicates(subset=["title", "job_url"])
-    
+
     logger.info(f"\n{'=' * 60}")
     logger.info(f"✅ TOTALE CONCORSI COMPATIBILI: {len(df)}")
-    
-    # Statistiche per località
     for loc in df["search_country"].value_counts().index:
         count = (df["search_country"] == loc).sum()
         logger.info(f"   {loc}: {count}")
-    
-    # Statistiche per motivo compatibilità
     for motivo in df["concorso_motivo"].value_counts().index:
         count = (df["concorso_motivo"] == motivo).sum()
         logger.info(f"   Tipo '{motivo}': {count}")
-    
     logger.info(f"{'=' * 60}")
+
     return df
