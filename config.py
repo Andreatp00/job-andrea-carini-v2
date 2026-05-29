@@ -24,41 +24,41 @@ MISTRAL_MODEL = os.environ.get("MISTRAL_MODEL", "open-mixtral-8x7b")
 # PROFILO CANDIDATO
 # ============================================================
 PROFILE = {
-    "name": "",
-    "headline": "Diplomato Ragioneria AFM | 4 anni esperienza (Vendite, Back Office, WordPress) | 25 anni | Trapani",
-    "degree": "Diploma Ragioneria - Indirizzo AFM (Amministrazione, Finanza, Marketing)",
-    "university_status": "Studente Universitario (Cerca Part-Time)",
+    "name": "Andrea Carini",
+    "headline": "Ragioniere con oltre 6 anni di esperienza (Contabilità, ERP, Logistica, Customer Support) | 25 anni | Trapani",
+    "degree": "Diploma di Ragioniere - Istituto Tecnico Economico",
+    "university_status": "Disponibilità immediata",
     "age": 25,
-    "location": "Trapani, Sicilia",
+    "location": "Trapani (TP), Sicilia",
+    "email": "cariniAndrea00@gmail.com",
+    "phone": "+39 339 102 9782",
     "mobility": ["Trapani e provincia", "Sicilia", "Smart Working / Remoto Italia"],
-    "languages": ["Italiano madrelingua", "Inglese (in apprendimento)"],
-    "experience_years": 4,
+    "languages": ["Italiano madrelingua", "Inglese (livello B1)"],
+    "experience_years": 6,
     "experience_roles": [
-        "Addetto vendite e assistenza clienti",
-        "Gestione cassa, fatturazione, resi, chiusura/apertura",
-        "Gestione e-commerce WordPress (WooCommerce)",
-        "Sviluppo aziendale e back office amministrativo",
+        "Gestione operativa punto vendita e supporto clienti",
+        "Contabilità generale e prima nota (ERP, gestionali contabili)",
+        "Gestione ordini, magazzino, inventario e spedizioni (WMS, ERP)",
+        "Emissione scontrini e operazioni di cassa",
+        "Aggiornamento siti web aziendali (WordPress, Shopify, WooCommerce)",
     ],
     "soft_skills": [
-        "Gestionali aziendali",
-        "Fatturazione elettronica",
-        "Contabilità di base",
-        "WordPress / E-commerce",
-        "Pacchetto Office (Excel, Word)",
-        "Precisione e gestione cassa",
-        "Affiancamento e apprendimento rapido",
+        "Software gestionali ERP (SAP Business One, Teamsystem, Zucchetti) e CRM",
+        "Contabilità, prima nota, registrazioni contabili",
+        "Gestione logistica e magazzino",
+        "Office Automation (Excel pivot/tabelle, Word)",
+        "Grafica base (Canva, Photoshop)",
+        "Precisione, affidabilità, lavoro in team e sotto pressione",
     ],
     "target_roles": [
-        "Addetto/a back office part-time",
-        "Impiegato/a amministrativo/a part-time",
-        "Addetto/a contabilità part-time",
+        "Impiegato/a amministrativo/a",
+        "Addetto/a back office",
+        "Addetto/a contabilità e prima nota",
         "Segretario/a amministrativo/a",
-        "Addetto/a fatturazione",
-        "Praticante studio commercialista",
-        "Addetto/a e-commerce e amministrazione",
+        "Addetto/a logistica e magazzino",
+        "Addetto/a gestione ordini e spedizioni",
         "Customer service back office",
         "Istruttore amministrativo (Concorsi C)",
-        "Addetto/a gestione documentale",
     ],
 }
 
@@ -67,43 +67,54 @@ PROFILE = {
 # ============================================================
 SEARCH_TERMS = [
     # Back office / Amministrativo / Ragioneria - Trapani e Provincia
-    "\"back office\" Trapani part-time",
-    "\"back office\" Marsala part-time",
-    "\"impiegato amministrativo\" Trapani part-time",
+    "\"back office\" Trapani",
+    "\"impiegato amministrativo\" Trapani",
     "\"addetto contabilità\" Trapani diploma",
-    "\"fatturazione\" Trapani part-time",
-    "\"segreteria\" Trapani part-time",
-    "\"ragioneria\" Trapani diploma",
+    "\"fatturazione\" Trapani",
+    "\"segreteria\" Trapani",
+    "\"ragioneria\" Trapani",
     "\"praticante\" studio commercialista Trapani",
-    "\"ufficio\" Trapani part-time",
-    "\"amministrativo\" Alcamo part-time",
+    "\"amministrativo\" Alcamo",
     "\"back office\" Mazara del Vallo",
+    
+    # Logistica / Magazzino / SAP / WMS
+    "\"logistica\" Trapani",
+    "\"magazzino\" Trapani",
+    "\"sap\" back office Trapani",
+    "\"wms\" logistica Sicilia",
+    "\"ordini e spedizioni\" Trapani",
     
     # WordPress / E-commerce (Data Entry / Admin)
     "\"wordpress\" back office Italia remoto",
     "\"ecommerce\" amministrativo remoto",
     "\"data entry\" Trapani",
-    "\"gestione ordini\" wordpress remoto",
+    "\"gestione ordini\" remoto",
     
-    # Smart working / Remoto Italia (Part-time / Diploma)
-    "\"smart working\" amministrativo part-time",
+    # Smart working / Remoto Italia (Diploma)
+    "\"smart working\" amministrativo",
     "\"remoto\" back office diploma",
-    "\"lavoro da casa\" contabilità part-time",
+    "\"lavoro da casa\" contabilità",
     "\"telelavoro\" amministrazione Italia",
-    "\"customer service\" remoto part-time",
+    "\"customer service\" remoto",
     "\"assistente virtuale\" amministrativo",
+    "\"full remote\" back office",
+    "\"100% remote\" amministrativo",
+    "\"lavoro agile\" contabilità",
+    "\"anywhere in italy\" amministrativo",
     
     # Keyword generiche per smart working "basta che paghino"
     "\"smart working\" senza esperienza diploma",
-    "\"remoto\" part-time diplomato",
+    "\"remoto\" diplomato",
 ]
 
 GOOGLE_SEARCH_TERMS = [
-    "\"lavoro\" back office Trapani Marsala \"part-time\" diploma",
+    "\"lavoro\" back office Trapani Marsala diploma",
     "\"offerta lavoro\" ragioneria AFM Trapani provincia senza laurea",
-    "\"smart working\" impiegato amministrativo part-time Italia",
-    "\"stage\" ufficio Trapani diploma",
+    "\"smart working\" impiegato amministrativo Italia",
+    "\"lavoro logistica\" magazzino Trapani",
     "concorsi pubblici Trapani categoria C diplomati",
+    "concorsi pubblici Palermo categoria C",
+    "bando giovani sicilia formazione gratuita",
     "\"lavoro da casa\" gestione ordini wordpress",
 ]
 
@@ -116,7 +127,7 @@ COUNTRY_SEARCHES = [
     {"country_indeed": "Italy", "location": "Italy", "label": "Italia (Smart Working)"},
 ]
 
-INCLUDED_COUNTRIES = {"Italia", "Trapani", "Sicilia"}
+INCLUDED_COUNTRIES = {"Italia", "Trapani", "Sicilia", "Palermo"}
 EXCLUDED_COUNTRIES = set()
 
 # ============================================================
@@ -136,6 +147,10 @@ COMPANY_CAREER_SITES = [
     {"company": "Synergie Italia", "country": "Trapani", "url": "https://www.synergie-italia.it/offerte-di-lavoro/trapani/", "search_params": {"keywords": "impiegato amministrativo"}, "label": "Synergie TP"},
     {"company": "Etjca", "country": "Trapani", "url": "https://www.etjca.it/offerte-lavoro/trapani/", "search_params": {"keywords": "amministrativo contabilità"}, "label": "Etjca TP"},
     {"company": "Humangest", "country": "Trapani", "url": "https://www.humangest.it/cerca-lavoro/trapani/", "search_params": {"keywords": "amministrativo back office"}, "label": "Humangest TP"},
+    {"company": "Injob", "country": "Trapani", "url": "https://www.injob.com/it/offerte-lavoro", "search_params": {"keywords": "amministrativo back office"}, "label": "Injob TP"},
+    {"company": "InfoJobs", "country": "Trapani", "url": "https://www.infojobs.it/offerte-lavoro/trapani", "search_params": {"keywords": "amministrativo contabilità"}, "label": "InfoJobs TP"},
+    {"company": "Monster", "country": "Trapani", "url": "https://www.monster.it/lavoro/ricerca/", "search_params": {"keywords": "amministrativo"}, "label": "Monster TP"},
+    {"company": "Corriere Lavoro", "country": "Trapani", "url": "https://lavoro.corriere.it/", "search_params": {"keywords": "amministrativo contabilità"}, "label": "Corriere Lavoro TP"},
 
     # --- Smart Working / Remoto Italia ---
     {"company": "Adecco Remote", "country": "Italia", "url": "https://www.adecco.it/ricerca-lavoro/smart-working/", "search_params": {"keywords": "back office amministrativo contabilità remoto"}, "label": "Adecco Smart Working"},
@@ -214,7 +229,7 @@ COMPANY_RELEVANCE_KEYWORDS = [
     "funzionario amministrativo", "concorso pubblico", "impiegato",
     "addetto", "assistente", "operatore", "part-time", "tempo parziale",
     "remoto", "smart working", "lavoro da casa", "da remoto", "telelavoro",
-    "flessibile", "mezza giornata", "mattina", "pomeriggio",
+    "flessibile", "mezza giornata", "mattina", "pomeriggio", "full remote", "100% remote", "lavoro agile",
 ]
 
 EXCLUDE_KEYWORDS_TITLE = [
@@ -230,9 +245,7 @@ EXCLUDE_KEYWORDS_TITLE = [
 EXCLUDE_KEYWORDS_TEXT = [
     "laurea richiesta", "laurea in", "laurea magistrale", "laurea triennale",
     "titolo di studio superiore al diploma",
-    "esperienza di almeno 5 anni", "esperienza minima 5 anni",
     "esperienza di almeno 10 anni",
-    "full-time esclusivo", "disponibilità full time esclusiva",
     "turni notturni", "lavoro notturno", "notturno",
     "si richiede patente c", "patente c", "carta di qualificazione",
 ]
@@ -246,21 +259,33 @@ PROFILE_KEYWORDS_SCORES = [
     # 15 punti — competenze chiave
     ("back office", 15),
     ("contabilità", 15),
+    ("prima nota", 15),
     ("fatturazione", 15),
-    ("fattura elettronica", 15),
+    ("sap business one", 15),
+    ("sap", 15),
+    ("teamsystem", 15),
+    ("zucchetti", 15),
+    ("erp", 15),
+    ("wms", 15),
+    ("crm", 15),
+    ("logistica", 15),
+    ("magazzino", 15),
+    ("ordini", 15),
+    ("spedizioni", 15),
     ("gestionali", 15),
     ("partita doppia", 15),
     ("bilancio", 15),
     ("iva", 15),
     ("segreteria", 15),
     ("wordpress", 15),
+    ("shopify", 15),
+    ("woocommerce", 15),
     ("e-commerce", 15),
     ("commercialista", 15),
     ("categoria c", 15),
     ("categoria d", 15),
     ("concorso pubblico", 15),
     ("istruttore amministrativo", 15),
-    ("funzionario amministrativo", 15),
     ("diplomati", 15),
 
     # 8 punti — competenze di contorno
@@ -354,7 +379,7 @@ PREFERRED_COMPANY_INDICATORS = [
     "agenzia entrate", "inps", "comune", "provincia", "regione",
     "asl", "azienda sanitaria", "ente pubblico", "amministrazione pubblica",
     "adecco", "manpower", "randstad", "gi group", "openjobmetis",
-    "synergie", "etjca", "humangest",
+    "synergie", "etjca", "humangest", "injob", "infojobs", "monster",
 ]
 
 STARTUP_KEYWORDS = [
@@ -366,5 +391,6 @@ STARTUP_KEYWORDS = [
 # ============================================================
 LOCALITY_KEYWORDS = {
     "trapani": ["trapani", "valderice", "paceco", "erice", "custonaci", "san vito", "alcamo", "marsala", "mazara", "castelvetrano"],
-    "sicilia": ["sicilia", "sicily", "palermo", "catania", "messina", "siracusa", "ragusa", "enna", "caltanissetta", "agrigento"],
+    "sicilia": ["sicilia", "sicily", "catania", "messina", "siracusa", "ragusa", "enna", "caltanissetta", "agrigento"],
+    "palermo": ["palermo", "bagheria", "monreale", "carini", "partinico", "termini imerese"],
 }

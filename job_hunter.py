@@ -401,6 +401,14 @@ def scrape_italian_portals() -> pd.DataFrame:
             "location_param": "l",
             "locations": ["Trapani", "Sicilia", "Italia"],
         },
+        {
+            "name": "Injob",
+            "base_url": "https://www.injob.com",
+            "search_endpoint": "/it/offerte-lavoro",
+            "query_param": "keyword",
+            "location_param": "location",
+            "locations": ["Trapani", "Sicilia", "Italia"],
+        },
     ]
     
     all_jobs = []
@@ -488,6 +496,25 @@ def scrape_italian_portals() -> pd.DataFrame:
     return pd.DataFrame(all_jobs)
 
 
+def is_actual_job_posting(url: str, title: str) -> bool:
+    """Verifica che il link sia effettivamente un annuncio di lavoro e non un articolo di blog."""
+    text = f"{url} {title}".lower()
+    
+    # Escludi domini editoriali/wiki
+    if any(skip in url.lower() for skip in [
+        "notizia", "news", "blog", "giornale", "wikipedia", "ilsole24ore", 
+        "corriere.it", "repubblica.it", "today.it", "ansa.it"
+    ]):
+        return False
+        
+    # Deve contenere parole tipiche da annuncio
+    job_markers = [
+        "candidati", "candidatura", "job", "career", "lavoro", "posizione", 
+        "assunzione", "concorso", "bando", "offerta", "opportunita"
+    ]
+    return any(marker in text for marker in job_markers)
+
+
 def search_duckduckgo() -> list[dict]:
     """
     Cerca su DuckDuckGo per trovare offerte di lavoro su tutti i siti .it
@@ -508,6 +535,9 @@ def search_duckduckgo() -> list[dict]:
         'site:*.it "ragioneria" "stage"',
         'site:*.it "concorsi pubblici" "categoria C" diplomati',
         'site:*.it "back office" remoto Italia',
+        'site:*.it "amministrazione" "injob" Trapani OR Sicilia OR "smart working"',
+        'site:*.it "lavoro" "amministrativo" "full remote"',
+        'site:*.it "assunzione" "impiegato contabile" Trapani',
     ]
     
     for query in queries:
@@ -557,12 +587,9 @@ def search_duckduckgo() -> list[dict]:
                 else:
                     continue
                 
-                # Filtra per keyword rilevanti
+                # Filtra per keyword rilevanti e verifica che sia una vera candidatura
                 title_lower = title.lower()
-                if not contains_any(title_lower, [
-                    "lavoro", "offerta", "cerco", "assumo", "assunzione",
-                    "impiego", "posizione", "annuncio", "candidatura"
-                ]):
+                if not is_actual_job_posting(href, title):
                     continue
                 
                 # Non escludere ancora qui, lascia che il filtro principale decida
@@ -691,17 +718,50 @@ def is_wrong_region(location: str) -> bool:
     if any(reg in loc for reg in wrong_regions):
         if not is_trapani_area(location) and not is_sicily_area(location):
             return True
+            
+    # Controlla anche casi in cui viene citata Milano e basta nel titolo o chiaramente nella location
     return False
+
+def has_strict_wrong_region_in_text(title: str, description: str) -> bool:
+    """Controlla se il testo indica esplicitamente una regione sbagliata come sede prevalente."""
+    text = f"{title} {description}".lower()
+    
+    # Se è chiaramente smart working, perdoniamo
+    if is_smart_working("", description, title):
+        return False
+        
+    # Se il titolo contiene esplicitamente una città palesemente lontana
+    title_lower = title.lower()
+    strict_wrong = ["milano", "roma", "torino", "bologna", "firenze", "venezia", "lombardia", "veneto", "emilia"]
+    for w in strict_wrong:
+        if re.search(rf"\b{w}\b", title_lower):
+            return True
+            
+    # Check "sede di lavoro: Milano", "trasferimento a Milano" o simili
+    if re.search(r"(sede di lavoro|sede|lavoro|location)[:\-\s]*(milano|roma|torino|bologna|firenze|venezia|lombardia|veneto|emilia|padova|verona|brescia|bergamo)", text):
+        return True
+        
+    if re.search(r"(disponibilità al trasferimento|trasferimento richiesto a)\s*(milano|roma|torino|bologna|firenze|venezia|lombardia|veneto|emilia|nord italia)", text):
+        return True
+        
+    return False
+
 
 
 def is_sicily_area(location: str) -> bool:
     """Verifica se la località è in Sicilia."""
     loc = normalize_text(location).lower()
     sicily_areas = [
-        "sicilia", "sicily", "palermo", "catania", "messina", "siracusa",
+        "sicilia", "sicily", "catania", "messina", "siracusa",
         "ragusa", "enna", "caltanissetta", "agrigento",
     ]
     return any(area in loc for area in sicily_areas)
+
+def is_palermo_area(location: str) -> bool:
+    """Verifica se la località è Palermo o provincia."""
+    loc = normalize_text(location).lower()
+    palermo_areas = ["palermo", "bagheria", "monreale", "carini", "partinico", "termini imerese"]
+    return any(area in loc for area in palermo_areas)
 
 
 def is_smart_working(location: str, description: str, title: str) -> bool:
@@ -709,7 +769,7 @@ def is_smart_working(location: str, description: str, title: str) -> bool:
     text = f"{location} {description} {title}".lower()
     smart_keywords = [
         "smart working", "remoto", "remote", "lavoro da casa", "work from home",
-        "da remoto", "telelavoro", "home office", "da casa",
+        "da remoto", "telelavoro", "home office", "da casa", "full remote", "100% remote", "lavoro agile"
     ]
     return any(kw in text for kw in smart_keywords)
 
@@ -730,17 +790,17 @@ def is_allowed_location(location: str, search_country: str = "") -> bool:
     loc = normalize_text(location).lower()
     
     # Se è Trapani o Sicilia -> permesso
-    if is_trapani_area(location) or is_sicily_area(location):
+    if is_trapani_area(location) or is_sicily_area(location) or is_palermo_area(location):
         return True
     
     # Se contiene keyword di smart working -> permesso
     if is_smart_working(location, "", ""):
         return True
     
-    # Se la location è generica "Italia" ma il search_country specifica Trapani/Sicilia
+    # Se la location è generica "Italia" ma il search_country specifica Trapani/Sicilia/Palermo
     if is_italy_only_location(location):
         country = normalize_text(search_country).lower()
-        if country in ["trapani", "sicilia"]:
+        if country in ["trapani", "sicilia", "palermo"]:
             return True
         # Se non è smart working e non è Trapani/Sicilia -> NON permesso
         return False
@@ -865,6 +925,10 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     # Controllo aggiuntivo con il vecchio sistema per sicurezza
     if is_wrong_region(location) and not is_smart_working(location, description, title):
         return {"excluded": True, "excluded_reason": "localita_non_pertinente_wrong_region"}
+        
+    # Nuovo controllo stringente nel testo
+    if has_strict_wrong_region_in_text(title, description):
+        return {"excluded": True, "excluded_reason": "sede_lavoro_esplicita_in_regione_errata"}
 
     if contains_any(title, EXCLUDE_KEYWORDS_TITLE):
         return {"excluded": True, "excluded_reason": "titolo_non_compatibile"}
@@ -917,7 +981,7 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     # Punteggio part-time / smart working
     part_time_score = 0
     if contains_any(full_text, ["part-time", "part time", "tempo parziale", "mezza giornata", "20 ore", "25 ore", "30 ore"]):
-        part_time_score += 40  # Priorità altissima al part-time (studente universitario)
+        part_time_score += 10  # Leggero bonus per il part-time, ma ha disponibilità immediata anche full-time
     
     if is_smart_working(location, description, title):
         part_time_score += 20
@@ -941,9 +1005,9 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
         geo_score += 30  # Trapani è la priorità assoluta
     elif country == "Trapani":
         geo_score += 30
-    elif is_sicily_area(location):
-        geo_score += 15
-    elif country == "Sicilia":
+    elif is_palermo_area(location) or country == "Palermo":
+        geo_score += 10  # Palermo ammissibile ma punteggio minore
+    elif is_sicily_area(location) or country == "Sicilia":
         geo_score += 15
     elif country == "Italia" and is_smart_working(location, description, title):
         geo_score += 20
@@ -1110,31 +1174,27 @@ def ai_rank_jobs(df: pd.DataFrame) -> pd.DataFrame:
             )
 
         prompt = f"""Sei un assistente AI specializzato nel recruiting e nella ricerca lavoro.
-Il candidato ha 25 anni, diplomato in Ragioneria AFM (Amministrazione, Finanza, Marketing), con 4 anni di esperienza in:
-- Vendita al banco e assistenza clienti
-- Gestione cassa, fatture, resi, chiusura/apertura
-- Gestione e-commerce WordPress
-- Sviluppo aziendale e back office
+Il candidato si chiama Andrea Carini, ha 25 anni, Diplomato Ragioniere (Istituto Tecnico Economico), con oltre 6 anni di esperienza in:
+- Gestione operativa punto vendita, supporto clienti e chiusura cassa
+- Contabilità generale, prima nota (ERP: SAP Business One, Teamsystem, Zucchetti)
+- Gestione ordini, logistica, inventario (WMS, ERP) e spedizioni
+- Gestione e-commerce e siti web (WordPress, Shopify, WooCommerce)
 
-Cerca lavoro PART-TIME (sta studiando all'università) come:
-- Addetto back office / Impiegato amministrativo
-- Addetto contabilità / Fatturazione
-- Segreteria / Assistente amministrativo
-- Praticante studio commercialista
-- Addetto e-commerce e amministrazione
-- Concorsi pubblici (categoria C/D) per diplomati
+Ha disponibilità immediata ed è automunito. Cerca lavoro come:
+- Impiegato amministrativo / Addetto back office / Contabilità
+- Addetto logistica / Gestione ordini e spedizioni
+- Customer service back office
+- Segreteria amministrativa
 
 Regole per il ranking (0-100):
 - +20 se è a Trapani o provincia
 - +15 se è in Sicilia
-- +15 se part-time o part time o tempo parziale o orario flessibile
-- +20 se smart working / remoto / lavoro da casa
+- +20 se smart working / remoto / lavoro da casa / full remote
 - +15 se non richiede laurea, basta il diploma
-- +10/15 se il ruolo è amministrativo/contabilità/segreteria
-- Premia stage/praticantato in studi commercialisti (fa esperienza!)
-- NESSUNA penalità per stage o tirocinio (sono positivi per fare esperienza)
-- Penalizza se richiede laurea
-- Penalizza se richiede full-time esclusivo
+- +10/15 se il ruolo è coerente con la logistica, magazzino, ERP o contabilità
+- Premia stage/praticantato (fa esperienza)
+- Penalizza fortemente se richiede laurea
+- Penalizza ruoli troppo senior (responsabile, dirigente, capo)
 - Penalizza ruoli troppo senior (responsabile, dirigente)
 
 Valuta le offerte fornite. Restituisci SOLO un JSON array nel formato esatto (senza altre parole):
