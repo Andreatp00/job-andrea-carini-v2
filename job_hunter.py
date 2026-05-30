@@ -299,7 +299,7 @@ def scrape_portals() -> pd.DataFrame:
             logger.info(f"[{counter}/{total}] Portali: '{term}' in {label}")
             try:
                 jobs = scrape_jobs(
-                    site_name=["indeed", "linkedin"],
+                    site_name=["indeed", "linkedin", "glassdoor", "zip_recruiter"],
                     search_term=term,
                     location=country_cfg["location"],
                     country_indeed=country_cfg["country_indeed"],
