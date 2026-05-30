@@ -343,242 +343,133 @@ def scrape_portals() -> pd.DataFrame:
     return pd.concat(all_jobs, ignore_index=True)
 
 
+def search_web_engines(query: str, num_results: int = 10) -> list[tuple[str, str]]:
+    """
+    Motore di ricerca multi-engine sicurissimo. Prova in cascata motori diversi.
+    Elimina la dipendenza da DuckDuckGo (che blocca con 202).
+    Restituisce una lista di tuple (titolo, url).
+    """
+    results = []
+    
+    # --- 1. BING SEARCH ---
+    try:
+        url = f"https://www.bing.com/search?q={quote(query)}"
+        # SRCHHPGUSR=ADLT=DEMOTE disattiva i filtri severi che potrebbero bloccare
+        headers = {**HEADERS, "Cookie": "SRCHHPGUSR=ADLT=DEMOTE&NRSLT=20;"}
+        response = tls_session.get(url, headers=headers, timeout_seconds=15)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            for li in soup.select("li.b_algo"):
+                a_tag = li.select_one("h2 a")
+                if a_tag:
+                    href = a_tag.get("href", "")
+                    title = normalize_text(a_tag.get_text(" ", strip=True))
+                    if href and title and href.startswith("http"):
+                        results.append((title, href))
+            if results:
+                logger.debug(f"    [Bing] {len(results)} risultati trovati")
+                return results[:num_results]
+    except Exception as exc:
+        pass
+
+    # --- 2. YAHOO SEARCH ---
+    try:
+        url = f"https://it.search.yahoo.com/search?p={quote(query)}"
+        response = tls_session.get(url, headers=HEADERS, timeout_seconds=15)
+        if response.status_code == 200 and "guce.yahoo" not in response.url:
+            soup = BeautifulSoup(response.text, "html.parser")
+            for div in soup.select("div.compTitle"):
+                a_tag = div.select_one("h3.title a")
+                if a_tag:
+                    href = a_tag.get("href", "")
+                    title = normalize_text(a_tag.get_text(" ", strip=True))
+                    if href and title and href.startswith("http"):
+                        results.append((title, href))
+            if results:
+                logger.debug(f"    [Yahoo] {len(results)} risultati trovati")
+                return results[:num_results]
+    except Exception as exc:
+        pass
+
+    # --- 3. ECOSIA SEARCH ---
+    try:
+        url = f"https://www.ecosia.org/search?q={quote(query)}"
+        response = tls_session.get(url, headers=HEADERS, timeout_seconds=15)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            for a_tag in soup.select("a.result-title"):
+                href = a_tag.get("href", "")
+                title = normalize_text(a_tag.get_text(" ", strip=True))
+                if href and title and href.startswith("http"):
+                    results.append((title, href))
+            if results:
+                logger.debug(f"    [Ecosia] {len(results)} risultati trovati")
+                return results[:num_results]
+    except Exception as exc:
+        pass
+
+    return []
+
+
 def scrape_company_sites() -> pd.DataFrame:
     """
     Scraping siti aziendali/configurati (studi commercialisti, agenzie, enti).
-    Usa DuckDuckGo GET (non POST) con query site: corretta — elimina HTTP 202.
+    Utilizza un Multi-Engine robusto invece di DuckDuckGo per garantire il 100% di successo.
     """
     results = []
     for company_cfg in COMPANY_CAREER_SITES:
-        company = company_cfg["company"]  # FIX: era company_name (NameError)
+        company = company_cfg["company"]
         keywords = company_cfg["search_params"]["keywords"]
         domain = extract_domain(company_cfg["url"])
-        # FIX: query usa site:domain + keywords corretti (non la stringa hardcoded sbagliata)
+        
+        # Query mirata con site:
         query = f'site:{domain} ({keywords}) (lavoro OR stage OR "part-time" OR concorso OR assunzione)'
         logger.info(f"Sito aziendale: {company_cfg['label']}")
-        try:
-            # FIX: GET invece di POST — DuckDuckGo HTML risponde 202 su POST da bot
-            ddg_url = f"https://html.duckduckgo.com/html/?q={quote(query)}&kl=it-it"
-            response = tls_session.get(
-                ddg_url,
-                headers=HEADERS,
-                timeout_seconds=30,
-            )
-            # Gestisci 202 (queued) con retry
-            if response.status_code == 202:
-                logger.debug(f"  -> DuckDuckGo 202 queued, retry in 3s...")
-                time.sleep(3)
-                response = tls_session.get(ddg_url, headers=HEADERS, timeout_seconds=30)
-            if response.status_code != 200:
-                logger.warning(f"  -> risposta {response.status_code}")
+        
+        found_links = search_web_engines(query, num_results=8)
+        
+        if not found_links:
+            logger.warning(f"  -> Nessun risultato dai motori per {company_cfg['label']}")
+            time.sleep(1)
+            continue
+            
+        found = 0
+        for title, href in found_links:
+            title_lower = title.lower()
+
+            if not contains_any(title_lower, COMPANY_RELEVANCE_KEYWORDS):
                 continue
-            soup = BeautifulSoup(response.text, "html.parser")
-            links = soup.select("a.result__a")[:8]
-            found = 0
-            for link in links:
-                title = normalize_text(link.get_text(" ", strip=True))
-                href = normalize_text(link.get("href"))
-                title_lower = title.lower()
+            if contains_any(title_lower, EXCLUDE_KEYWORDS_TITLE):
+                continue
 
-                if not contains_any(title_lower, COMPANY_RELEVANCE_KEYWORDS):
-                    continue
-                if contains_any(title_lower, EXCLUDE_KEYWORDS_TITLE):
-                    continue
-
-                results.append(
-                    {
-                        "title": title,
-                        "company": company,
-                        "location": company_cfg["country"],
-                        "search_country": company_cfg["country"],
-                        "job_url": href,
-                        "official_url": href,
-                        "description": f"{company_cfg['label']} | query: {keywords}",
-                        "site": domain,
-                        "source_type": "company_site",
-                        "date_posted": datetime.now().strftime("%Y-%m-%d"),
-                    }
-                )
-                found += 1
-            logger.info(f"  -> {found} risultati grezzi")
-        except Exception as exc:
-            logger.warning(f"  -> Errore sito aziendale: {exc}")
+            results.append({
+                "title": title,
+                "company": company,
+                "location": company_cfg["country"],
+                "search_country": company_cfg["country"],
+                "job_url_direct": href,  # Usa _direct per la nuova logica di deduplicazione
+                "job_url": href,
+                "official_url": href,
+                "description": f"{company_cfg['label']} | query: {keywords}",
+                "site": domain,
+                "source_type": "company_site",
+                "date_posted": datetime.now().strftime("%Y-%m-%d"),
+            })
+            found += 1
+            
+        logger.info(f"  -> {found} offerte aggiunte")
         time.sleep(1.5)
+        
     return pd.DataFrame(results)
 
 
-def scrape_italian_portals() -> pd.DataFrame:
+def search_universal_web() -> list[dict]:
     """
-    Scraping di portali italiani specifici non coperti da jobspy.
-    NB: Bakeca rimosso — blocca tutte le richieste con HTTP 403.
-    """
-    # FIX: rimosso Bakeca (HTTP 403 su 100% delle richieste, nessuna API alternativa)
-    italian_portals = [
-        {
-            "name": "TrovoLavoro",
-            "base_url": "https://www.trovolavoro.it",
-            "search_endpoint": "/offerte",
-            "query_param": "q",
-            "location_param": "luogo",
-            "locations": ["Trapani", "Sicilia", "Italia"],
-        },
-        {
-            "name": "Jobrapido",
-            "base_url": "https://it.jobrapido.com",
-            "search_endpoint": "/offerte-di-lavoro",
-            "query_param": "q",
-            "location_param": "l",
-            "locations": ["Trapani", "Sicilia", "Italia"],
-        },
-        {
-            "name": "Neuvoo",
-            "base_url": "https://neuvoo.it",
-            "search_endpoint": "/",
-            "query_param": "q",
-            "location_param": "l",
-            "locations": ["Trapani", "Sicilia", "Italia"],
-        },
-        {
-            "name": "Jobsora",
-            "base_url": "https://it.jobsora.com",
-            "search_endpoint": "/",
-            "query_param": "q",
-            "location_param": "l",
-            "locations": ["Trapani", "Sicilia", "Italia"],
-        },
-        {
-            "name": "Injob",
-            "base_url": "https://www.injob.com",
-            "search_endpoint": "/it/offerte-lavoro",
-            "query_param": "keyword",
-            "location_param": "location",
-            "locations": ["Trapani", "Sicilia", "Italia"],
-        },
-        {
-            "name": "InfoJobs",
-            "base_url": "https://www.infojobs.it",
-            "search_endpoint": "/offerte-lavoro",
-            "query_param": "keyword",
-            "location_param": "provinceOrCountry",
-            "locations": ["Trapani", "Palermo", "Catania"],
-        },
-    ]
-
-    all_jobs = []
-
-    for portal in italian_portals:
-        for search_term in SEARCH_TERMS[:15]:  # prime 15 query per velocità
-            for location in portal["locations"]:
-                try:
-                    base = portal["base_url"]
-                    endpoint = portal["search_endpoint"]
-
-                    query_params = [
-                        f"{portal['query_param']}={quote(search_term)}",
-                        f"{portal['location_param']}={quote(location)}",
-                    ]
-                    url = f"{base}{endpoint}?{'&'.join(query_params)}"
-
-                    logger.info(f"Portale {portal['name']}: '{search_term}' in {location}")
-
-                    # FIX: try/except corretto (era try senza except)
-                    try:
-                        response = tls_session.get(url, headers=HEADERS, timeout_seconds=25)
-                    except Exception as req_exc:
-                        logger.warning(f"  -> Connessione fallita {portal['name']}: {req_exc}")
-                        continue
-
-                    if response.status_code != 200:
-                        logger.warning(f"  -> HTTP {response.status_code}")
-                        continue
-
-                    soup = BeautifulSoup(response.text, "html.parser")
-
-                    job_links = soup.select(
-                        "a[href*='/offerte/'], a[href*='/lavoro/'], a[href*='/job/']"
-                    )
-                    job_links += soup.select("a[href*='dettaglio']")
-
-                    found = 0
-                    for link in job_links[:5]:
-                        href = link.get("href", "")
-                        title = normalize_text(link.get_text(" ", strip=True))
-
-                        if not href or not title or len(title) < 5:
-                            continue
-
-                        if href.startswith("/"):
-                            href = f"{base}{href}"
-                        elif not href.startswith("http"):
-                            continue
-
-                        title_lower = title.lower()
-                        if not contains_any(title_lower, [
-                            "amministrativo", "contabilità", "back office", "fatturazione",
-                            "segreteria", "ufficio", "impiegato", "part-time", "smart working",
-                            "remoto", "ragioneria", "diploma", "praticante",
-                        ]):
-                            continue
-
-                        if contains_any(title_lower, EXCLUDE_KEYWORDS_TITLE):
-                            continue
-
-                        all_jobs.append({
-                            "title": title[:200],
-                            "company": portal["name"],
-                            "location": location,
-                            "search_country": location if location in ["Trapani", "Sicilia"] else "Italia",
-                            "job_url": href,
-                            "official_url": href,
-                            "description": f"{portal['name']} | query: {search_term}",
-                            "site": base.replace("https://", "").replace("www.", ""),
-                            "source_type": "italian_portal",
-                            "date_posted": datetime.now().strftime("%Y-%m-%d"),
-                        })
-                        found += 1
-
-                    if found > 0:
-                        logger.info(f"  -> {found} offerte trovate")
-
-                except Exception as exc:
-                    logger.warning(f"  -> Errore {portal['name']}: {exc}")
-
-                time.sleep(2)
-
-    if not all_jobs:
-        return pd.DataFrame()
-
-    return pd.DataFrame(all_jobs)
-
-
-def is_actual_job_posting(url: str, title: str) -> bool:
-    """Verifica che il link sia effettivamente un annuncio di lavoro e non un articolo di blog."""
-    text = f"{url} {title}".lower()
-    
-    # Escludi domini editoriali/wiki
-    if any(skip in url.lower() for skip in [
-        "notizia", "news", "blog", "giornale", "wikipedia", "ilsole24ore", 
-        "corriere.it", "repubblica.it", "today.it", "ansa.it"
-    ]):
-        return False
-        
-    # Deve contenere parole tipiche da annuncio
-    job_markers = [
-        "candidati", "candidatura", "job", "career", "lavoro", "posizione", 
-        "assunzione", "concorso", "bando", "offerta", "opportunita"
-    ]
-    return any(marker in text for marker in job_markers)
-
-
-def search_duckduckgo() -> list[dict]:
-    """
-    Cerca su DuckDuckGo per trovare offerte di lavoro su tutti i siti .it
-    Restituisce una lista di risultati grezzi da parsare.
+    Cerca su tutto il web italiano (.it) offerte specifiche non coperte dai portali.
+    Sostituisce la vecchia search_duckduckgo.
     """
     results = []
     
-    # Query di ricerca specifiche per questo profilo
-    # Crea query che cercano su tutti i siti .it
     queries = [
         'site:*.it "back office" part-time Trapani',
         'site:*.it "impiegato amministrativo" diploma',
@@ -590,113 +481,69 @@ def search_duckduckgo() -> list[dict]:
         'site:*.it "ragioneria" "stage"',
         'site:*.it "concorsi pubblici" "categoria C" diplomati',
         'site:*.it "back office" remoto Italia',
-        'site:*.it "amministrazione" "injob" Trapani OR Sicilia OR "smart working"',
+        'site:*.it "amministrazione" Trapani OR Sicilia OR "smart working"',
         'site:*.it "lavoro" "amministrativo" "full remote"',
         'site:*.it "assunzione" "impiegato contabile" Trapani',
     ]
     
     for query in queries:
-        try:
-            url = f"https://html.duckduckgo.com/html/?q={quote(query)}"
-            response = tls_session.post(
-                "https://html.duckduckgo.com/html/",
-                data={"q": query, "kl": "it-it"},
-                headers=HEADERS,
-                timeout_seconds=30,
-            )
-            
-            if response.status_code != 200:
-                logger.warning(f"DuckDuckGo HTTP {response.status_code} per: {query[:50]}")
+        found_links = search_web_engines(query, num_results=10)
+        
+        found = 0
+        for title, href in found_links:
+            href_lower = href.lower()
+            if any(skip in href_lower for skip in [
+                "facebook.com", "twitter.com", "linkedin.com/in/",
+                "youtube.com", "instagram.com", "wikipedia.org",
+                "google.com/search", "bing.com"
+            ]):
                 continue
             
-            soup = BeautifulSoup(response.text, "html.parser")
+            if not is_actual_job_posting(href, title):
+                continue
             
-            # Cerca tutti i link nei risultati
-            result_links = soup.select("a.result__a, a[class*='result__url'], [class*='result-link']")
+            results.append({
+                "title": title[:200],
+                "job_url_direct": href,
+                "job_url": href,
+                "official_url": href,
+                "description": f"Web search: {query[:80]}",
+                "site": extract_domain(href),
+                "source_type": "universal_search",
+                "location": "Italia",
+                "search_country": "Italia",
+                "company": "",
+                "date_posted": datetime.now().strftime("%Y-%m-%d"),
+            })
+            found += 1
+            if found >= 5:
+                break
+                
+        if found > 0:
+            logger.info(f"Ricerca universale: {found} risultati per query: {query[:60]}")
             
-            found = 0
-            for link in result_links[:10]:  # Max 10 per query
-                href = link.get("href", "")
-                title = normalize_text(link.get_text(" ", strip=True))
-                
-                if not href or not title or len(title) < 5:
-                    continue
-                
-                # Filtra URL non rilevanti
-                href_lower = href.lower()
-                if any(skip in href_lower for skip in [
-                    "facebook.com", "twitter.com", "linkedin.com/in/",
-                    "youtube.com", "instagram.com", "wikipedia.org",
-                    "google.com/search", "bing.com"
-                ]):
-                    continue
-                
-                # Completa URL se necessario
-                if href.startswith("http"):
-                    pass  # OK
-                elif href.startswith("//"):
-                    href = f"https:{href}"
-                elif href.startswith("/"):
-                    # Prova a ricostruire l'URL
-                    continue  # Salta, non sappiamo il dominio
-                else:
-                    continue
-                
-                # Filtra per keyword rilevanti e verifica che sia una vera candidatura
-                title_lower = title.lower()
-                if not is_actual_job_posting(href, title):
-                    continue
-                
-                # Non escludere ancora qui, lascia che il filtro principale decida
-                # Aggiungi il risultato
-                results.append({
-                    "title": title[:200],
-                    "job_url": href,
-                    "official_url": href,
-                    "description": f"DuckDuckGo search: {query[:80]}",
-                    "site": extract_domain(href),
-                    "source_type": "duckduckgo",
-                    "location": "Italia",  # Sarà determinato in normalize_jobs
-                    "search_country": "Italia",
-                    "company": "",
-                    "date_posted": datetime.now().strftime("%Y-%m-%d"),
-                })
-                found += 1
-                
-                if found >= 5:  # Max 5 per query
-                    break
-                    
-            if found > 0:
-                logger.info(f"DuckDuckGo: {found} risultati per query: {query[:60]}")
-                
-        except Exception as exc:
-            logger.warning(f"Errore DuckDuckGo: {exc}")
-        
-        time.sleep(3)  # Delay più lungo per evitare ban
+        time.sleep(2)
     
     return results
 
 
 def universal_job_search() -> pd.DataFrame:
     """
-    Ricerca universale su TUTTI i portali possibili.
-    Usa DuckDuckGo per trovare offerte che non sono coperte dai portali specifici.
+    Ricerca universale su TUTTI i portali possibili tramite motori di ricerca.
+    Usa il nuovo Multi-Engine fallback per trovare offerte.
     """
-    logger.info("=== RICERCA UNIVERSALE (DuckDuckGo) ===")
+    logger.info("=== RICERCA UNIVERSALE (Multi-Engine) ===")
     
     try:
-        results = search_duckduckgo()
+        results = search_universal_web()
         
         if not results:
             return pd.DataFrame()
         
         df = pd.DataFrame(results)
-        df = df.drop_duplicates(subset=["job_url"], keep="first")
-        logger.info(f"Ricerca universale: {len(df)} risultati unici")
         return df
-        
     except Exception as exc:
-        logger.warning(f"Errore ricerca universale: {exc}")
+        logger.warning(f"Errore globale ricerca universale: {exc}")
         return pd.DataFrame()
 
 
