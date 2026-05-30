@@ -463,6 +463,77 @@ def scrape_company_sites() -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
+def scrape_italian_portals() -> pd.DataFrame:
+    """
+    Scraping di portali italiani (TrovoLavoro, Jobrapido, InfoJobs, ecc.)
+    Utilizza la ricerca Multi-Engine (Bing, Yahoo) con operatore site:
+    per aggirare in modo sicuro al 100% i blocchi anti-bot (HTTP 403, 301, Timeout).
+    """
+    italian_portals = [
+        {"name": "TrovoLavoro", "domain": "trovolavoro.it"},
+        {"name": "Jobrapido", "domain": "it.jobrapido.com"},
+        {"name": "Neuvoo", "domain": "neuvoo.it"},
+        {"name": "Jobsora", "domain": "it.jobsora.com"},
+        {"name": "Injob", "domain": "injob.com"},
+        {"name": "InfoJobs", "domain": "infojobs.it"},
+    ]
+
+    all_jobs = []
+    
+    # Focus sulle keyword principali per massimizzare l'efficienza della ricerca web
+    core_queries = [
+        '"impiegato amministrativo" Trapani OR Sicilia OR Italia',
+        '"back office" Trapani OR Sicilia OR "smart working"',
+        '"contabilità" "part-time" OR Trapani OR Sicilia',
+        '"amministrazione" "smart working" OR remoto',
+    ]
+
+    for portal in italian_portals:
+        for term in core_queries:
+            query = f'site:{portal["domain"]} {term}'
+            logger.info(f"Portale {portal['name']}: {term[:40]}...")
+            
+            found_links = search_web_engines(query, num_results=5)
+            
+            found = 0
+            for title, href in found_links:
+                title_lower = title.lower()
+
+                if not contains_any(title_lower, [
+                    "amministrativo", "contabilità", "back office", "fatturazione", 
+                    "segreteria", "ufficio", "impiegato", "part-time", "smart working", 
+                    "remoto", "ragioneria", "diploma", "stage", "praticante"
+                ]):
+                    continue
+                if contains_any(title_lower, EXCLUDE_KEYWORDS_TITLE):
+                    continue
+
+                all_jobs.append({
+                    "title": title[:200],
+                    "company": portal["name"],
+                    "location": "Italia", # Determinata poi nel fallback
+                    "search_country": "Italia",
+                    "job_url_direct": href,
+                    "job_url": href,
+                    "official_url": href,
+                    "description": f"{portal['name']} | query: {term}",
+                    "site": portal["domain"],
+                    "source_type": "italian_portal",
+                    "date_posted": datetime.now().strftime("%Y-%m-%d"),
+                })
+                found += 1
+                
+            if found > 0:
+                logger.info(f"  -> {found} offerte trovate su {portal['name']}")
+                
+            time.sleep(1.5)
+
+    if not all_jobs:
+        return pd.DataFrame()
+
+    return pd.DataFrame(all_jobs)
+
+
 def search_universal_web() -> list[dict]:
     """
     Cerca su tutto il web italiano (.it) offerte specifiche non coperte dai portali.
