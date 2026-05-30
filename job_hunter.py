@@ -106,6 +106,45 @@ def fingerprint_job(row: dict) -> str:
     return sha1(signature.encode("utf-8")).hexdigest()
 
 
+def _smart_fingerprint(row: dict, full_df) -> str:
+    """
+    Fingerprint intelligente che rileva URL generici/duplicati di LinkedIn.
+    
+    Problema: JobSpy/LinkedIn spesso ritorna lo STESSO URL (es. /jobs/view/4415255278)
+    per molte offerte diverse nella stessa ricerca. Se usiamo quell'URL come fingerprint,
+    la deduplicazione eliminerebbe offerte reali diverse.
+    
+    Soluzione: Se un URL appare 3+ volte nel dataset → è un URL generico/fallback →
+    usa titolo+azienda come fingerprint invece dell'URL.
+    """
+    canonical_url = canonicalize_url(row.get("job_url") or row.get("official_url") or "")
+    
+    if canonical_url:
+        # Conta quante volte questo URL appare nel dataset
+        url_col = full_df.get("job_url")
+        if url_col is not None:
+            url_count = (url_col == canonical_url).sum()
+        else:
+            url_count = 1
+        
+        # Se l'URL è unico (o quasi), usalo come fingerprint → deduplicazione normale
+        if url_count < 3:
+            return sha1(canonical_url.lower().encode("utf-8")).hexdigest()
+        
+        # Se l'URL appare 3+ volte → è un URL generico LinkedIn
+        # Usa titolo+azienda come fingerprint per non perdere offerte diverse
+    
+    # Fingerprint basato su titolo+azienda+location (fallback per URL duplicati/mancanti)
+    signature = " | ".join(
+        [
+            normalize_text(row.get("title")).lower()[:100],
+            normalize_text(row.get("company")).lower()[:50],
+            normalize_text(row.get("location")).lower()[:50],
+        ]
+    )
+    return sha1(signature.encode("utf-8")).hexdigest()
+
+
 def grade_from_score(score: float) -> str:
     if score >= 90:
         return "A+"
@@ -662,6 +701,11 @@ def universal_job_search() -> pd.DataFrame:
 
 
 def normalize_jobs(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalizza e deduplica le offerte di lavoro.
+    IMPORTANTE: Preferisce job_url_direct (URL diretto all'annuncio) su job_url
+    (che LinkedIn/JobSpy spesso riempie con URL generici tipo /jobs/view/XXX).
+    """
     if df.empty:
         return df
 
@@ -671,10 +715,20 @@ def normalize_jobs(df: pd.DataFrame) -> pd.DataFrame:
     if hasattr(work, 'columns'):
         work.columns = [normalize_text(column).lower() for column in work.columns]
 
-    if "job_url" not in work.columns:
-        if "job_url_direct" in work.columns:
-            work["job_url"] = work["job_url_direct"]
-        elif "url" in work.columns:
+    # ── FIX: Preferisci SEMPRE job_url_direct (URL specifico) su job_url (generico) ──
+    # JobSpy restituisce:
+    #   - job_url: spesso un URL LinkedIn generico (es. /jobs/view/4415255278)
+    #              che è LO STESSO per tutte le offerte della stessa ricerca → BUG DUPLICATI
+    #   - job_url_direct: l'URL effettivo dell'annuncio sul sito dell'azienda → CORRETTO
+    if "job_url_direct" in work.columns:
+        # Usa job_url_direct come URL primario quando non è vuoto
+        work["job_url"] = work.apply(
+            lambda row: (normalize_text(row.get("job_url_direct", ""))
+                        or normalize_text(row.get("job_url", ""))),
+            axis=1,
+        )
+    elif "job_url" not in work.columns:
+        if "url" in work.columns:
             work["job_url"] = work["url"]
         else:
             work["job_url"] = ""
@@ -702,9 +756,25 @@ def normalize_jobs(df: pd.DataFrame) -> pd.DataFrame:
         source_priority(source_type, site)
         for source_type, site in zip(work["source_type"], work["site"])
     ]
-    work["job_fingerprint"] = work.apply(lambda row: fingerprint_job(row.to_dict()), axis=1)
+
+    # ── Deduplicazione multi-livello ────────────────────────────────────────
+    # 1. Fingerprint basato su URL quando l'URL è unico e significativo
+    # 2. Fingerprint basato su titolo+azienda+location quando l'URL è generico/duplicato
+    work["job_fingerprint"] = work.apply(
+        lambda row: _smart_fingerprint(row.to_dict(), work), axis=1
+    )
     work = work.sort_values(["job_fingerprint", "source_priority"], ascending=[True, False])
     work = work.drop_duplicates(subset=["job_fingerprint"], keep="first")
+
+    # ── Safety net: elimina righe con URL identici (ulteriore protezione) ──
+    # Se 30 righe diverse hanno comunque lo stesso URL → tieni solo la migliore
+    work = work.sort_values(["source_priority"], ascending=[False])
+    non_empty_url = work["job_url"].str.strip() != ""
+    # Tra quelle con URL non vuoto, drop duplicate per URL
+    deduped_url = work[non_empty_url].drop_duplicates(subset=["job_url"], keep="first")
+    # Unisci con quelle senza URL
+    work = pd.concat([deduped_url, work[~non_empty_url]], ignore_index=True)
+
     return work.reset_index(drop=True)
 
 
