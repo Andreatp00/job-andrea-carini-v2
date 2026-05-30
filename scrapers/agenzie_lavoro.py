@@ -3,15 +3,23 @@ Scraper per Agenzie per il Lavoro — Ricerca annunci amministrativi part-time
 Cerca su Adecco, Manpower, Randstad, Gi Group, Openjobmetis, Synergie, Humangest
 con focus su Trapani, Sicilia e Smart Working.
 
-URL verificati e aggiornati al 2025. Per le agenzie che cambiano spesso URL,
-è presente un fallback automatico via DuckDuckGo site: search.
+URL verificati e aggiornati al 2026. Per le agenzie che cambiano spesso URL,
+è presente un fallback automatico via Multi-Engine (Bing/Yahoo/Ecosia) site: search.
 """
 
 import logging
 import re
 import time
+import random
 from datetime import datetime
 from urllib.parse import quote
+
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import COMPANY_RELEVANCE_KEYWORDS as TARGET_ROLE_KEYWORDS
+from config import EXCLUDE_KEYWORDS_TITLE as EXCLUDE_ROLE_KEYWORDS
+from job_hunter import search_web_engines
 
 import pandas as pd
 import requests
@@ -34,7 +42,7 @@ HEADERS = {
 tls_session = tls_client.Session(client_identifier="chrome_120")
 
 # ─── Configurazione agenzie ───────────────────────────────────────────────────
-# URL aggiornati al 2025. Se un URL restituisce 404, il fallback DuckDuckGo
+# URL aggiornati al 2026. Se un URL restituisce 404, il fallback Multi-Engine
 # cercherà automaticamente offerte sul dominio dell'agenzia.
 AGENCY_CONFIGS = [
     {
@@ -52,81 +60,54 @@ AGENCY_CONFIGS = [
         "site_domain": "manpower.it",
     },
     {
-        # URL corretto 2025: randstad usa /offerte-di-lavoro/ non /trovare-lavoro/
+        # URL aggiornato 2026
         "name": "Randstad",
-        "search_url_trapani": "https://www.randstad.it/offerte-di-lavoro/trapani/",
-        "search_url_smart": "https://www.randstad.it/offerte-di-lavoro/smart-working/",
-        # Fallback URL se il precedente dà 404
-        "alt_url_trapani": "https://www.randstad.it/offerte-lavoro/trapani/",
-        "alt_url_smart": "https://www.randstad.it/offerte-lavoro/smart-working/",
+        "search_url_trapani": "https://www.randstad.it/lavoro/trapani/",
+        "search_url_smart": "https://www.randstad.it/lavoro/remoto/",
         "keywords": ["amministrativo", "contabilità", "back office", "impiegato", "segreteria", "part-time"],
         "site_domain": "randstad.it",
     },
     {
         "name": "Gi Group",
-        "search_url_trapani": "https://www.gigroup.it/offerte-lavoro/trapani/",
-        "search_url_smart": "https://www.gigroup.it/offerte-lavoro/remote/",
+        "search_url_trapani": "https://www.gigroup.it/lavoro/trapani/",
+        "search_url_smart": "https://www.gigroup.it/lavoro/remoto/",
         "keywords": ["amministrativo", "contabilità", "back office", "impiegato", "part-time"],
         "site_domain": "gigroup.it",
     },
     {
-        # Openjobmetis — URL corretto 2025
+        # URL aggiornato 2026
         "name": "Openjobmetis",
-        "search_url_trapani": "https://www.openjobmetis.it/offerte-lavoro/trapani/",
-        "search_url_smart": "https://www.openjobmetis.it/offerte-lavoro/smart-working/",
-        "alt_url_trapani": "https://www.openjobmetis.it/cerca-lavoro/trapani/",
-        "alt_url_smart": "https://www.openjobmetis.it/cerca-lavoro/smart-working/",
+        "search_url_trapani": "https://www.openjobmetis.it/lavoro/trapani/",
+        "search_url_smart": "https://www.openjobmetis.it/lavoro/remoto/",
         "keywords": ["amministrativo", "contabilità", "back office", "impiegato", "part-time"],
         "site_domain": "openjobmetis.it",
     },
     {
-        # Synergie Italia — URL corretto 2025
+        # URL aggiornato 2026
         "name": "Synergie Italia",
-        "search_url_trapani": "https://www.synergie-italia.it/offerte-lavoro/trapani/",
-        "search_url_smart": "https://www.synergie-italia.it/offerte-lavoro/smart-working/",
-        "alt_url_trapani": "https://www.synergie-italia.it/offerte-di-lavoro/trapani/",
-        "alt_url_smart": "https://www.synergie-italia.it/offerte-di-lavoro/remote/",
+        "search_url_trapani": "https://www.synergie-italia.it/lavoro/trapani/",
+        "search_url_smart": "https://www.synergie-italia.it/lavoro/remoto/",
         "keywords": ["amministrativo", "contabilità", "back office", "impiegato"],
         "site_domain": "synergie-italia.it",
     },
     {
-        # Humangest — URL corretto 2025
+        # URL aggiornato 2026
         "name": "Humangest",
-        "search_url_trapani": "https://www.humangest.it/offerte-di-lavoro/trapani/",
-        "search_url_smart": "https://www.humangest.it/offerte-di-lavoro/smart-working/",
-        "alt_url_trapani": "https://www.humangest.it/cerca-lavoro/trapani/",
-        "alt_url_smart": "https://www.humangest.it/cerca-lavoro/remote/",
+        "search_url_trapani": "https://www.humangest.it/lavoro/trapani/",
+        "search_url_smart": "https://www.humangest.it/lavoro/remoto/",
         "keywords": ["amministrativo", "contabilità", "back office", "impiegato", "segreteria"],
         "site_domain": "humangest.it",
     },
     {
         "name": "Etjca",
-        "search_url_trapani": "https://www.etjca.it/offerte-lavoro/trapani/",
-        "search_url_smart": "https://www.etjca.it/offerte-lavoro/smart-working/",
+        "search_url_trapani": "https://www.etjca.it/lavoro/trapani/",
+        "search_url_smart": "https://www.etjca.it/lavoro/remoto/",
         "keywords": ["amministrativo", "contabilità", "back office", "impiegato"],
         "site_domain": "etjca.it",
     },
 ]
 
-TARGET_ROLE_KEYWORDS = [
-    "amministrativo", "contabilità", "fatturazione", "back office", "segreteria",
-    "impiegato", "ufficio", "commercialista", "contabile", "segreterio",
-    "addetto", "assistente amministrativo", "praticante", "stage",
-    "part-time", "tempo parziale", "mezza giornata",
-    "customer service", "servizio clienti", "amministrazione",
-    "ragioneria", "bilancio", "iva", "fatture", "ordini",
-    "trapani", "marsala", "mazara", "alcamo", "castelvetrano",
-    "smart working", "remoto", "da remoto", "lavoro da casa",
-]
-
-EXCLUDE_ROLE_KEYWORDS = [
-    "operaio", "magazziniere", "cameriere", "barista", "cuoco",
-    "pizzaiolo", "commesso", "venditore", "promoter", "agente di commercio",
-    "autista", "elettricista", "idraulico", "manutenzione", "programmatore",
-    "sviluppatore", "informatico", "tecnico informatico",
-    "infermiere", "medico", "farmacista", "ingegnere", "architetto",
-]
-
+# TARGET_ROLE_KEYWORDS e EXCLUDE_ROLE_KEYWORDS sono ora importati da config.py
 
 def _fetch_url(url: str, use_tls: bool = False) -> tuple[int, str]:
     """
@@ -146,32 +127,20 @@ def _fetch_url(url: str, use_tls: bool = False) -> tuple[int, str]:
         return 0, ""
 
 
-def _scrape_agency_via_duckduckgo(agency_name: str, site_domain: str, location: str) -> list[dict]:
+def _scrape_agency_via_multi_engine(agency_name: str, site_domain: str, location: str) -> list[dict]:
     """
-    Fallback: cerca offerte dell'agenzia via DuckDuckGo site: search.
+    Fallback: cerca offerte dell'agenzia via Multi-Engine (Bing/Yahoo/Ecosia).
     Usato quando l'URL diretto dell'agenzia ritorna 404 o è bloccato.
     """
     results = []
-    kw_query = "amministrativo OR contabilità OR back office OR segreteria OR impiegato"
+    kw_query = "amministrativo OR back office OR impiegato OR stage OR call center"
     loc_query = "Trapani OR Sicilia" if location == "Trapani" else "smart working OR remoto"
     query = f'site:{site_domain} ({kw_query}) ({loc_query})'
 
     try:
-        ddg_url = f"https://html.duckduckgo.com/html/?q={quote(query)}&kl=it-it"
-        resp_code, html = _fetch_url(ddg_url, use_tls=True)
-
-        if resp_code != 200:
-            logger.debug(f"    DuckDuckGo fallback HTTP {resp_code} per {agency_name}")
-            return []
-
-        soup = BeautifulSoup(html, "html.parser")
-        links = soup.select("a.result__a")[:8]
-
-        for link in links:
-            title = link.get_text(" ", strip=True)
-            href = link.get("href", "")
-            if not title or not href or len(title) < 8:
-                continue
+        found_links = search_web_engines(query, num_results=8)
+        
+        for title, href in found_links:
             title_lower = title.lower()
             if not any(kw in title_lower for kw in TARGET_ROLE_KEYWORDS):
                 continue
@@ -184,16 +153,18 @@ def _scrape_agency_via_duckduckgo(agency_name: str, site_domain: str, location: 
                 "search_country": location,
                 "job_url": href,
                 "official_url": href,
-                "description": f"{agency_name} (DDG) | {title[:200]}",
+                "description": f"{agency_name} (Multi-Engine Fallback) | {title[:200]}",
                 "site": site_domain,
                 "source_type": "agenzia_lavoro",
                 "date_posted": datetime.now().strftime("%Y-%m-%d"),
             })
 
         if results:
-            logger.info(f"    DuckDuckGo fallback: {len(results)} risultati per {agency_name}")
+            logger.info(f"    Multi-Engine Fallback: {len(results)} risultati per {agency_name}")
+            
+        time.sleep(random.uniform(1.5, 3.0))
     except Exception as exc:
-        logger.debug(f"    DuckDuckGo fallback errore {agency_name}: {exc}")
+        logger.debug(f"    Multi-Engine errore {agency_name}: {exc}")
 
     return results
 
@@ -322,9 +293,9 @@ def _get_agency_results(agency: dict, url: str, alt_url: str | None, location: s
             return results
         logger.warning(f"  -> {name} [{location}] (alt): HTTP {status2}")
 
-    # Tentativo 3: DuckDuckGo fallback
-    logger.info(f"  -> {name} [{location}]: uso DuckDuckGo fallback...")
-    return _scrape_agency_via_duckduckgo(name, domain, location)
+    # Tentativo 3: Multi-Engine fallback
+    logger.info(f"  -> {name} [{location}]: uso Multi-Engine fallback...")
+    return _scrape_agency_via_multi_engine(name, domain, location)
 
 
 def scrape_agenzie_lavoro() -> pd.DataFrame:

@@ -8,26 +8,36 @@ import logging
 import time
 from datetime import datetime
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import EXCLUDE_KEYWORDS_TITLE as EXCLUDE_ROLE_KEYWORDS
+
 import pandas as pd
 import requests
+import tls_client
 
 logger = logging.getLogger("JobHunter.Subito")
 
 # ─── API JSON ufficiale Subito.it ─────────────────────────────────────────────
 SUBITO_API = "https://hades.subito.it/v1/search/classifieds"
 
-HEADERS = {
+# Sessione stealth per bypassare Cloudflare
+SUBITO_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.6099.144 Mobile Safari/537.36"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
     ),
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
     "Referer": "https://www.subito.it/",
     "Origin": "https://www.subito.it",
     "X-Subito-Env": "production",
+    "X-Requested-With": "XMLHttpRequest",
 }
+
+# Sessione TLS per evitare blocchi Cloudflare
+tls_session = tls_client.Session(client_identifier="chrome_120")
 
 # Categoria 29 = Lavoro > Offerte di lavoro su Subito.it
 SUBITO_CATEGORY = 29
@@ -43,16 +53,23 @@ SUBITO_SEARCHES = [
     {"q": "fatturazione ufficio",      "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
     {"q": "segreteria",                "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
     {"q": "ragioneria",                "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
-    {"q": "praticante commercialista", "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "praticante",                "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
     {"q": "amministrazione ufficio",   "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
     {"q": "part time ufficio",         "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
     {"q": "customer service",          "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
     {"q": "addetto contabilità",       "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "stage",                     "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "tirocinio formativo",       "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    {"q": "apprendistato",             "region": SUBITO_REGION_SICILIA, "label": "Trapani"},
+    
     # Smart Working Italia (nessun region filter → tutto Italia)
-    {"q": "smart working amministrativo",  "label": "Italia"},
+    {"q": "smart working",                 "label": "Italia"},
     {"q": "lavoro da casa contabilità",    "label": "Italia"},
     {"q": "remoto back office",            "label": "Italia"},
     {"q": "full remote amministrativo",    "label": "Italia"},
+    {"q": "call center da casa",           "label": "Italia"},
+    {"q": "data entry remoto",             "label": "Italia"},
+    {"q": "inserimento dati",              "label": "Italia"},
 ]
 
 EXCLUDE_PATTERNS = [
@@ -69,7 +86,8 @@ TARGET_KEYWORDS = [
     "ufficio", "commercialista", "ragioneria", "contabile", "impiegato",
     "praticante", "stage", "part-time", "part time", "smart working",
     "remoto", "bilancio", "lavoro", "addetto", "assistente", "customer service",
-    "amministrazione", "prima nota", "erp",
+    "amministrazione", "prima nota", "erp", "call center", "data entry",
+    "inserimento dati", "tirocinio", "apprendistato",
 ]
 
 TRAPANI_CITIES = {
@@ -128,19 +146,34 @@ def scrape_subito() -> pd.DataFrame:
 
         logger.info(f"Subito API: '{q}' [{label}]")
 
-        for attempt in range(2):          # max 2 tentativi per query
+        for attempt in range(3):          # max 3 tentativi per query
             try:
-                resp = requests.get(
+                # Usa tls_session per bypassare Cloudflare
+                resp = tls_session.get(
                     SUBITO_API,
                     params=params,
-                    headers=HEADERS,
-                    timeout=25,
+                    headers=SUBITO_HEADERS,
+                    timeout=30,
                 )
 
                 if resp.status_code == 429:
-                    logger.warning("  -> Rate limit Subito API (429), attendo 10s...")
-                    time.sleep(10)
+                    logger.warning(f"  -> Rate limit Subito API (429), attendo {10*(attempt+1)}s...")
+                    time.sleep(10*(attempt+1))
                     continue
+
+                # Se 403, prova con headers alternativi
+                if resp.status_code == 403 and attempt < 2:
+                    alt_headers = {**SUBITO_HEADERS, 
+                                   "User-Agent": "Subito/1.0 (iOS; iPhone) AppleWebKit/605.1.15"}
+                    resp = tls_session.get(
+                        SUBITO_API,
+                        params=params,
+                        headers=alt_headers,
+                        timeout=30,
+                    )
+                    if resp.status_code == 403:
+                        logger.warning(f"  -> HTTP 403 (tentativo {attempt+1}), provo headers alternativi...")
+                        continue
 
                 if resp.status_code != 200:
                     logger.warning(f"  -> HTTP {resp.status_code}")

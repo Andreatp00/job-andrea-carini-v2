@@ -292,6 +292,10 @@ def scrape_portals() -> pd.DataFrame:
     total = len(SEARCH_TERMS) * len(COUNTRY_SEARCHES)
     counter = 0
 
+    # Siti che funzionano: LinkedIn, Indeed, Google
+    # Siti bloccati da Cloudflare (403): Glassdoor, ZipRecruiter
+    WORKING_SITES = ["indeed", "linkedin", "google"]
+
     for country_cfg in COUNTRY_SEARCHES:
         for term in SEARCH_TERMS:
             counter += 1
@@ -299,7 +303,7 @@ def scrape_portals() -> pd.DataFrame:
             logger.info(f"[{counter}/{total}] Portali: '{term}' in {label}")
             try:
                 jobs = scrape_jobs(
-                    site_name=["indeed", "linkedin", "glassdoor", "zip_recruiter"],
+                    site_name=WORKING_SITES,
                     search_term=term,
                     location=country_cfg["location"],
                     country_indeed=country_cfg["country_indeed"],
@@ -356,7 +360,7 @@ def search_web_engines(query: str, num_results: int = 10) -> list[tuple[str, str
         url = f"https://www.bing.com/search?q={quote(query)}"
         # SRCHHPGUSR=ADLT=DEMOTE disattiva i filtri severi che potrebbero bloccare
         headers = {**HEADERS, "Cookie": "SRCHHPGUSR=ADLT=DEMOTE&NRSLT=20;"}
-        response = tls_session.get(url, headers=headers, timeout_seconds=15)
+        response = tls_session.get(url, headers=headers, timeout_seconds=30)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
             for li in soup.select("li.b_algo"):
@@ -375,7 +379,7 @@ def search_web_engines(query: str, num_results: int = 10) -> list[tuple[str, str
     # --- 2. YAHOO SEARCH ---
     try:
         url = f"https://it.search.yahoo.com/search?p={quote(query)}"
-        response = tls_session.get(url, headers=HEADERS, timeout_seconds=15)
+        response = tls_session.get(url, headers=HEADERS, timeout_seconds=30)
         if response.status_code == 200 and "guce.yahoo" not in response.url:
             soup = BeautifulSoup(response.text, "html.parser")
             for div in soup.select("div.compTitle"):
@@ -394,7 +398,7 @@ def search_web_engines(query: str, num_results: int = 10) -> list[tuple[str, str
     # --- 3. ECOSIA SEARCH ---
     try:
         url = f"https://www.ecosia.org/search?q={quote(query)}"
-        response = tls_session.get(url, headers=HEADERS, timeout_seconds=15)
+        response = tls_session.get(url, headers=HEADERS, timeout_seconds=30)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
             for a_tag in soup.select("a.result-title"):
@@ -785,6 +789,47 @@ def is_smart_working(location: str, description: str, title: str) -> bool:
         "da remoto", "telelavoro", "home office", "da casa", "full remote", "100% remote", "lavoro agile"
     ]
     return any(kw in text for kw in smart_keywords)
+
+
+def is_actual_job_posting(url: str, title: str) -> bool:
+    """
+    Verifica se un URL è un annuncio di lavoro reale e non una pagina generica.
+    Esclude risultati di ricerca, home page, pagine di login, ecc.
+    """
+    url_lower = url.lower()
+    title_lower = title.lower()
+    
+    # Escludi pagine di ricerca
+    if any(x in url_lower for x in [
+        "/search", "/cerca", "/ricerca", "?q=", "?s=", "&search=",
+        "/offerte-lavoro/", "/cerca-lavoro/", "/trova-lavoro/"
+    ]):
+        return False
+    
+    # Escludi pagine di login/registrazione
+    if any(x in url_lower for x in [
+        "/login", "/registrazione", "/accedi", "/signin", "/signup",
+        "/area-riservata", "/my-account"
+    ]):
+        return False
+    
+    # Escludi home page
+    if url_lower.endswith("/") or url_lower.endswith(".it") or url_lower.endswith(".com"):
+        return False
+    
+    # Includi se contiene keyword di annuncio nell'URL
+    job_keywords = ["annuncio", "offerta", "job", "lavoro", "posizione", "dettaglio", "bando", "concorso"]
+    if any(kw in url_lower for kw in job_keywords):
+        return True
+    
+    # Includi se il titolo sembra un annuncio
+    if any(kw in title_lower for kw in [
+        "impiegato", "addetto", "back office", "amministrativo", "contabilità",
+        "segreteria", "ragioneria", "stage", "tirocinio", "praticante"
+    ]):
+        return True
+    
+    return True  # Default: accetta
 
 
 def is_italy_only_location(location: str) -> bool:

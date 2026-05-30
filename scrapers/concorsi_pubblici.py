@@ -282,7 +282,37 @@ def _scrape_rss_feed(feed_cfg: dict) -> list[dict]:
             root = ET.fromstring(resp.content)
         except ET.ParseError as e:
             logger.warning(f"  RSS {feed_cfg['name']}: XML parse error: {e}")
-            return []
+            # Fallback: Prova a parsare come HTML e trovare link
+            try:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for a in soup.find_all("a", href=True):
+                    href = a.get("href")
+                    if href and any(kw in href.lower() for kw in ["bando", "concorso", "avviso", "selezione"]):
+                        title = a.get_text(" ", strip=True) or href
+                        full_text = title
+                        compatible, reason = _check_diploma_compatibile(title, full_text)
+                        if compatible:
+                            location, search_country = _guess_location(full_text)
+                            date_str = datetime.now().strftime("%Y-%m-%d")
+                            results.append({
+                                "title": title[:300],
+                                "company": feed_cfg["name"],
+                                "location": location,
+                                "search_country": search_country,
+                                "job_url": href,
+                                "official_url": href,
+                                "description": f"Concorso Pubblico | {feed_cfg['name']} | Diploma OK ({reason}) | {full_text[:300]}",
+                                "site": feed_cfg["site"],
+                                "source_type": "concorso_pubblico",
+                                "date_posted": date_str,
+                                "concorso_motivo": reason,
+                            })
+                if results:
+                    logger.info(f"  RSS {feed_cfg['name']} (HTML fallback): {len(results)} concorsi compatibili")
+                return results
+            except Exception as e2:
+                logger.warning(f"  RSS {feed_cfg['name']}: HTML fallback anche fallito: {e2}")
+                return []
 
         # Namespace per Atom e RSS
         ns = {"atom": "http://www.w3.org/2005/Atom"}
