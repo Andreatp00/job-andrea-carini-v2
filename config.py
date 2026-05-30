@@ -55,10 +55,11 @@ PROFILE = {
         "Addetto/a back office",
         "Addetto/a contabilità e prima nota",
         "Segretario/a amministrativo/a",
-        "Addetto/a logistica e magazzino",
-        "Addetto/a gestione ordini e spedizioni",
-        "Customer service back office",
-        "Istruttore amministrativo (Concorsi C)",
+        "Operatore/trice Call Center Inbound/Outbound",
+        "Addetto/a Data Entry e Inserimento Dati",
+        "Addetto/a Assistenza Clienti / Customer Service",
+        "Tirocinante / Stagista (ufficio, smart working, vari settori)",
+        "Apprendista impiegato/a",
     ],
 }
 
@@ -77,34 +78,27 @@ SEARCH_TERMS = [
     "\"amministrativo\" Alcamo",
     "\"back office\" Mazara del Vallo",
     
-    # Logistica / Magazzino / SAP / WMS
-    "\"logistica\" Trapani",
-    "\"magazzino\" Trapani",
-    "\"sap\" back office Trapani",
-    "\"wms\" logistica Sicilia",
-    "\"ordini e spedizioni\" Trapani",
-    
-    # WordPress / E-commerce (Data Entry / Admin)
-    "\"wordpress\" back office Italia remoto",
-    "\"ecommerce\" amministrativo remoto",
-    "\"data entry\" Trapani",
-    "\"gestione ordini\" remoto",
-    
-    # Smart working / Remoto Italia (Diploma)
-    "\"smart working\" amministrativo",
-    "\"remoto\" back office diploma",
-    "\"lavoro da casa\" contabilità",
-    "\"telelavoro\" amministrazione Italia",
+    # Smart working Vari / Call Center / Data Entry / Assistenza
+    "\"smart working\" Italia",
+    "\"call center\" remoto",
+    "\"assistenza clienti\" smart working",
+    "\"help desk\" remoto",
+    "\"data entry\" lavoro da casa",
+    "\"inserimento dati\" remoto",
     "\"customer service\" remoto",
-    "\"assistente virtuale\" amministrativo",
-    "\"full remote\" back office",
-    "\"100% remote\" amministrativo",
-    "\"lavoro agile\" contabilità",
-    "\"anywhere in italy\" amministrativo",
+    "\"assistente virtuale\" remoto",
     
-    # Keyword generiche per smart working "basta che paghino"
-    "\"smart working\" senza esperienza diploma",
-    "\"remoto\" diplomato",
+    # Stage / Tirocini Formativi (Senza esperienza)
+    "\"stage\" formativo Trapani",
+    "\"tirocinio\" impiegato Trapani",
+    "\"apprendistato\" ufficio Trapani",
+    "\"stage\" smart working",
+    "\"nessuna esperienza\" remoto",
+    
+    # Concorsi e Opportunità Giovani
+    "concorsi pubblici Trapani categoria C diplomati",
+    "concorsi pubblici Palermo categoria C",
+    "bando giovani sicilia formazione gratuita",
 ]
 
 GOOGLE_SEARCH_TERMS = [
@@ -230,6 +224,8 @@ COMPANY_RELEVANCE_KEYWORDS = [
     "addetto", "assistente", "operatore", "part-time", "tempo parziale",
     "remoto", "smart working", "lavoro da casa", "da remoto", "telelavoro",
     "flessibile", "mezza giornata", "mattina", "pomeriggio", "full remote", "100% remote", "lavoro agile",
+    "call center", "data entry", "inserimento dati", "help desk", "assistenza clienti", 
+    "tirocinio", "tirocinio formativo", "apprendistato", "junior", "senza esperienza", "inbound", "outbound",
 ]
 
 EXCLUDE_KEYWORDS_TITLE = [
@@ -240,6 +236,7 @@ EXCLUDE_KEYWORDS_TITLE = [
     "programmatore", "sviluppatore", "informatico", "tecnico informatico",
     "elettricista", "idraulico", "manutenzione", "autista", "fattorino",
     "corriere", "magazzino", "logistica", "carrellista", "montatore",
+    "meccanico", "pulizie", "oss", "badante", "cantiere", "muratore",
 ]
 
 EXCLUDE_KEYWORDS_TEXT = [

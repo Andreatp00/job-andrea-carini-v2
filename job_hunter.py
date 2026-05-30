@@ -486,6 +486,9 @@ def scrape_italian_portals() -> pd.DataFrame:
         '"back office" Trapani OR Sicilia OR "smart working"',
         '"contabilità" "part-time" OR Trapani OR Sicilia',
         '"amministrazione" "smart working" OR remoto',
+        '"call center" "smart working" OR remoto',
+        '"data entry" "smart working" OR remoto',
+        '"stage" OR "tirocinio" Trapani OR "smart working"',
     ]
 
     for portal in italian_portals:
@@ -502,7 +505,9 @@ def scrape_italian_portals() -> pd.DataFrame:
                 if not contains_any(title_lower, [
                     "amministrativo", "contabilità", "back office", "fatturazione", 
                     "segreteria", "ufficio", "impiegato", "part-time", "smart working", 
-                    "remoto", "ragioneria", "diploma", "stage", "praticante"
+                    "remoto", "ragioneria", "diploma", "stage", "praticante",
+                    "call center", "data entry", "assistenza clienti", "customer service",
+                    "inserimento dati", "tirocinio", "apprendistato", "inbound", "outbound",
                 ]):
                     continue
                 if contains_any(title_lower, EXCLUDE_KEYWORDS_TITLE):
@@ -555,6 +560,10 @@ def search_universal_web() -> list[dict]:
         'site:*.it "amministrazione" Trapani OR Sicilia OR "smart working"',
         'site:*.it "lavoro" "amministrativo" "full remote"',
         'site:*.it "assunzione" "impiegato contabile" Trapani',
+        'site:*.it "call center" "lavoro da casa" Italia',
+        'site:*.it "data entry" "smart working" remoto',
+        'site:*.it "stage" impiegato Trapani',
+        'site:*.it "tirocinio" ufficio Trapani',
     ]
     
     for query in queries:
