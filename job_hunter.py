@@ -1158,6 +1158,12 @@ def _parse_json_response(content: str):
 
 
 def ai_rank_jobs(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ranking AI con Mistral. Gestisce il rate limiting con:
+    - Batch grandi (30 job) per ridurre le chiamate API
+    - Delay fisso tra batch (4s)
+    - Backoff esponenziale su 429 (15s → 30s → 60s)
+    """
     if not MISTRAL_API_KEY or df.empty:
         return df
 
@@ -1172,8 +1178,14 @@ def ai_rank_jobs(df: pd.DataFrame) -> pd.DataFrame:
     enriched["ai_score"] = pd.NA
     enriched["ai_reason"] = ""
 
-    for start in range(0, len(enriched), 15):
-        batch = enriched.iloc[start:start + 15]
+    BATCH_SIZE = 30          # Batch grandi → meno chiamate API (prima era 15)
+    DELAY_BETWEEN = 4        # Secondi tra batch (prima era 0)
+    MAX_RETRIES = 3          # Max retry per batch su 429
+    total_batches = (len(enriched) + BATCH_SIZE - 1) // BATCH_SIZE
+    consecutive_429 = 0      # Contatore 429 consecutivi
+
+    for batch_num, start in enumerate(range(0, len(enriched), BATCH_SIZE), 1):
+        batch = enriched.iloc[start:start + BATCH_SIZE]
         jobs_summary = []
         for idx, row in batch.iterrows():
             jobs_summary.append(
@@ -1211,7 +1223,6 @@ Regole per il ranking (0-100):
 - Premia stage/praticantato (fa esperienza)
 - Penalizza fortemente se richiede laurea
 - Penalizza ruoli troppo senior (responsabile, dirigente, capo)
-- Penalizza ruoli troppo senior (responsabile, dirigente)
 
 Valuta le offerte fornite. Restituisci SOLO un JSON array nel formato esatto (senza altre parole):
 [{{ "idx": "id", "ai_score": 85, "reason": "Motivazione di massimo 10 parole" }}]
@@ -1219,22 +1230,58 @@ Valuta le offerte fornite. Restituisci SOLO un JSON array nel formato esatto (se
 Offerte da valutare:
 {json.dumps(jobs_summary, ensure_ascii=False, indent=2)}"""
 
-        try:
-            response = client.chat.completions.create(
-                model=MISTRAL_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=2500,
+        # Retry con backoff esponenziale su 429
+        success = False
+        for retry in range(MAX_RETRIES):
+            try:
+                logger.info(f"  AI Ranking batch {batch_num}/{total_batches} ({len(batch)} offerte)...")
+                response = client.chat.completions.create(
+                    model=MISTRAL_MODEL,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=4000,
+                )
+                parsed = _parse_json_response(response.choices[0].message.content)
+                mapping = {item["idx"]: item for item in parsed}
+                applied = 0
+                for idx in batch.index:
+                    item = mapping.get(str(idx))
+                    if item:
+                        enriched.loc[idx, "ai_score"] = item.get("ai_score")
+                        enriched.loc[idx, "ai_reason"] = normalize_text(item.get("reason"))
+                        applied += 1
+                logger.info(f"  AI Ranking batch {batch_num}: {applied}/{len(batch)} scored")
+                consecutive_429 = 0
+                success = True
+                break
+
+            except Exception as exc:
+                exc_str = str(exc)
+                if "429" in exc_str or "rate_limit" in exc_str.lower():
+                    consecutive_429 += 1
+                    # Backoff esponenziale: 15s, 30s, 60s
+                    wait = min(15 * (2 ** retry), 60)
+                    logger.info(
+                        f"  AI Ranking batch {batch_num}: rate limit (429), "
+                        f"attendo {wait}s (tentativo {retry + 1}/{MAX_RETRIES})..."
+                    )
+                    time.sleep(wait)
+                else:
+                    logger.info(f"  AI Ranking batch {batch_num} skippato: {exc}")
+                    break
+
+        if not success and consecutive_429 >= 3:
+            # Se 3+ batch consecutivi falliscono per rate limit, ferma l'AI ranking
+            remaining = total_batches - batch_num
+            logger.info(
+                f"  AI Ranking: {consecutive_429} rate limit consecutivi, "
+                f"skip {remaining} batch rimanenti (rule_score usato come fallback)"
             )
-            parsed = _parse_json_response(response.choices[0].message.content)
-            mapping = {item["idx"]: item for item in parsed}
-            for idx in batch.index:
-                item = mapping.get(str(idx))
-                if item:
-                    enriched.loc[idx, "ai_score"] = item.get("ai_score")
-                    enriched.loc[idx, "ai_reason"] = normalize_text(item.get("reason"))
-        except Exception as exc:
-            logger.warning(f"Ranking Mistral non applicato sul batch {start}: {exc}")
+            break
+
+        # Delay tra batch per evitare rate limiting
+        if batch_num < total_batches:
+            time.sleep(DELAY_BETWEEN)
 
     enriched["ai_score"] = pd.to_numeric(enriched["ai_score"], errors="coerce")
     enriched["final_score"] = enriched.apply(
