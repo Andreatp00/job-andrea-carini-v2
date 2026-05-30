@@ -153,7 +153,7 @@ def scrape_subito() -> pd.DataFrame:
                     SUBITO_API,
                     params=params,
                     headers=SUBITO_HEADERS,
-                    timeout=30,
+                    timeout_seconds=30,
                 )
 
                 if resp.status_code == 429:
@@ -169,7 +169,7 @@ def scrape_subito() -> pd.DataFrame:
                         SUBITO_API,
                         params=params,
                         headers=alt_headers,
-                        timeout=30,
+                        timeout_seconds=30,
                     )
                     if resp.status_code == 403:
                         logger.warning(f"  -> HTTP 403 (tentativo {attempt+1}), provo headers alternativi...")
