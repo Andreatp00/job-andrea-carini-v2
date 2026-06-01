@@ -949,6 +949,158 @@ def detect_language_fit(full_text: str) -> tuple[bool, bool, bool]:
     return english_ok, other_lang_required, local_language_plus
 
 
+# =============================================================================
+# NUOVE FUNZIONI PER FILTRI AVANZATI (Località + Lingua + URL)
+# =============================================================================
+
+def has_wrong_location_in_text(title: str, description: str, location: str) -> bool:
+    """
+    Verifica se il testo dell'annuncio indica una località diversa da quella dichiarata.
+    Esclude offerte dove il testo menziona esplicitamente altre città/regioni.
+    """
+    full_text = f"{title} {description}".lower()
+    declared_location = location.lower()
+    
+    # Se la location dichiarata è Trapani/Sicilia/Smart Working
+    if any(keyword in declared_location for keyword in ["trapani", "sicilia", "smart", "remoto"]):
+        # Controlla se il testo menziona altre città Italiane (non Sicilia)
+        wrong_cities = [
+            "milano", "roma", "torino", "bologna", "firenze", "napoli", "bari",
+            "venezia", "verona", "genova", "trieste", "trento", "bolzano",
+            "parma", "modena", "reggio emilia", "ravenna", "rimini",
+            "lombardia", "piemonte", "emilia", "toscana", "lazio",
+            "campania", "puglia", "calabria", "marche", "umbria", "abruzzo",
+            "veneto", "liguria", "friuli", "valle d'aosta"
+        ]
+        for city in wrong_cities:
+            # Controlla se la città è nel testo MA NON nella location dichiarata
+            if city in full_text and city not in declared_location:
+                return True
+    
+    return False
+
+
+def get_location_from_url(url: str) -> str:
+    """
+    Estrae eventuali indicazioni di località dall'URL.
+    Funziona con LinkedIn, Indeed e altri portali.
+    """
+    if not url:
+        return ""
+    
+    url_lower = url.lower()
+    
+    # Controlla se l'URL contiene città specifiche
+    city_patterns = [
+        ("milano", "Milano"), ("roma", "Roma"), ("torino", "Torino"),
+        ("bologna", "Bologna"), ("firenze", "Firenze"), ("napoli", "Napoli"),
+        ("bari", "Bari"), ("venezia", "Venezia"), ("verona", "Verona"),
+        ("genova", "Genova"), ("palermo", "Palermo"), ("catania", "Catania"),
+        ("trapani", "Trapani"), ("marsala", "Marsala"), ("alcamo", "Alcamo"),
+        ("mazara", "Mazara"), ("erice", "Erice"),
+    ]
+    
+    for pattern, city in city_patterns:
+        if pattern in url_lower:
+            return city
+    
+    # Controlla per regioni
+    region_patterns = [
+        ("lombardia", "Lombardia"), ("piemonte", "Piemonte"), ("emilia", "Emilia"),
+        ("toscana", "Toscana"), ("lazio", "Lazio"), ("campania", "Campania"),
+        ("puglia", "Puglia"), ("sicilia", "Sicilia"), ("sardegna", "Sardegna"),
+    ]
+    
+    for pattern, region in region_patterns:
+        if pattern in url_lower:
+            return region
+    
+    return ""
+
+
+def is_english_text(text: str, threshold: float = 0.7) -> bool:
+    """
+    Verifica se un testo è prevalentemente in inglese.
+    Usa un algoritmo semplice basato su parole comuni.
+    
+    Ritorna True se il testo è in inglese, False se è in italiano.
+    """
+    if not text or len(text.strip()) < 50:
+        return False
+    
+    text_lower = text.lower()
+    words = re.findall(r'\b\w+\b', text_lower)  # Estrae solo parole
+    
+    if not words or len(words) < 10:
+        return False
+    
+    # Parole comuni in inglese (escluse parole troppo brevi)
+    english_words = {
+        "the", "and", "to", "of", "a", "in", "is", "it", "that", "for",
+        "you", "was", "on", "are", "with", "as", "at", "be", "this",
+        "have", "from", "or", "an", "by", "not", "but", "they", "which",
+        "their", "we", "if", "will", "what", "so", "can", "when", "there",
+        "job", "position", "company", "requirements", "skills", "experience",
+        "application", "send", "your", "resume", "cv", "apply", "now",
+        "remote", "working", "office", "administrative", "accounting",
+        "customer", "service", "support", "assistant", "clerk", "role",
+        "responsibilities", "duties", "qualifications", "benefits", "salary"
+    }
+    
+    # Parole comuni in italiano
+    italian_words = {
+        "il", "di", "e", "a", "in", "la", "che", "è", "non", "un", "con",
+        "per", "una", "son", "ma", "io", "si", "più", "del", "lo", "come",
+        "lavoro", "ufficio", "amministrativo", "contabilità", "segreteria",
+        "impiegato", "addetto", "azienda", "cercasi", "offerta", "annuncio",
+        "sede", "reparto", "part", "time", "full", "contratto", "esperienza",
+        "diploma", "ragioneria", "back", "office", "stagista", "tirocinio"
+    }
+    
+    english_count = sum(1 for word in words if word in english_words)
+    italian_count = sum(1 for word in words if word in italian_words)
+    total = len(words)
+    
+    # Se meno del 30% delle parole sono italiane, è probabilmente inglese
+    if total > 10 and (italian_count / total) < 0.3:
+        return True
+    
+    # Se più del 70% delle parole sono inglese, è inglese
+    if total > 10 and (english_count / total) > threshold:
+        return True
+    
+    return False
+
+
+def extract_location_from_linkedin_url(url: str) -> str:
+    """
+    Estrae la località dall'URL di LinkedIn.
+    LinkedIn spesso ha la località nei parametri dell'URL.
+    """
+    if not url or "linkedin.com/jobs/view/" not in url.lower():
+        return ""
+    
+    url_lower = url.lower()
+    
+    # Prova a estrarre dall'URL (a volte c'è la città)
+    # Esempio: linkedin.com/jobs/view/123456/?keywords=...&location=Milano
+    if "location=" in url_lower:
+        import re
+        match = re.search(r'location=([^&]+)', url_lower)
+        if match:
+            loc = match.group(1).replace("+", " ").replace("%20", " ").replace("%2c", ",")
+            return normalize_text(loc)
+    
+    # Per altri siti, prova a estrarre dal dominio
+    domain = extract_domain(url)
+    if any(city in domain for city in ["trapani", "sicilia", "palermo"]):
+        return "Trapani"
+    elif any(city in domain for city in ["milano", "roma", "torino", "bologna"]):
+        return domain.split(".")[0].title()
+    
+    return ""
+
+
 def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     title = normalize_text(row.get("title"))
     company = normalize_text(row.get("company"))
@@ -980,6 +1132,32 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     # Nuovo controllo stringente nel testo
     if has_strict_wrong_region_in_text(title, description):
         return {"excluded": True, "excluded_reason": "sede_lavoro_esplicita_in_regione_errata"}
+
+    # === NUOVI CONTROLLI: Località + Lingua + URL ===
+    
+    # 1. Controllo località nel TESTO dell'annuncio
+    if has_wrong_location_in_text(title, description, location):
+        return {"excluded": True, "excluded_reason": "localita_testuale_non_pertinente"}
+    
+    # 2. Controllo località nell'URL
+    job_url = row.get("job_url", "")
+    url_location = get_location_from_url(job_url)
+    if url_location and not is_allowed_location(url_location, row.get("search_country", "")):
+        if not is_smart_working(location, description, title):
+            return {"excluded": True, "excluded_reason": "url_non_pertinente"}
+    
+    # 3. Controllo LINGUA: Testo in inglese
+    if is_english_text(full_text):
+        return {"excluded": True, "excluded_reason": "testo_in_inglese"}
+    
+    # 4. Controllo LINGUA: Inglese richiesto
+    if contains_any(full_text, [
+        "english required", "english mandatory", "fluent english required",
+        "inglese richiesto", "inglese obbligatorio", "conoscenza inglese obbligatoria",
+        "english speaking required", "must speak english", "english is a must",
+        "must have english", "excellent english", "business english required"
+    ]):
+        return {"excluded": True, "excluded_reason": "inglese_richiesto"}
 
     if contains_any(title, EXCLUDE_KEYWORDS_TITLE):
         return {"excluded": True, "excluded_reason": "titolo_non_compatibile"}
