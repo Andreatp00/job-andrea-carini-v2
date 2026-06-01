@@ -31,6 +31,9 @@ jobs:
           echo "TELEGRAM_CHAT_ID set: ${{ secrets.TELEGRAM_CHAT_ID != '' && 'YES' || 'NO' }}"
           echo "OPENAI_API_KEY set: ${{ secrets.OPENAI_API_KEY != '' && 'YES' || 'NO' }}"
 
+      - name: Initial delay to avoid rate limiting
+        run: sleep 15  # Attende 15 secondi prima di iniziare per evitare IP rate limiting
+
       - name: Run Job Hunter Bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

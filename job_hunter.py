@@ -292,9 +292,11 @@ def scrape_portals() -> pd.DataFrame:
     total = len(SEARCH_TERMS) * len(COUNTRY_SEARCHES)
     counter = 0
 
-    # Siti che funzionano: LinkedIn, Indeed, Google
-    # Siti bloccati da Cloudflare (403): Glassdoor, ZipRecruiter
-    WORKING_SITES = ["indeed", "linkedin", "google"]
+    # Siti che funzionano: LinkedIn, Indeed (Google Jobs disabilitato - HTTP 429 su GitHub Actions)
+    # Siti bloccati da Cloudflare (403): Glassdoor, ZipRecruiter, Google Jobs
+    # NOTE: Google Jobs causa HTTP 429 su GitHub Actions IP condivisi
+    #       Il Multi-Engine search (Bing/Yahoo/Ecosia) copre già le ricerche
+    WORKING_SITES = ["indeed", "linkedin"]
 
     for country_cfg in COUNTRY_SEARCHES:
         for term in SEARCH_TERMS:
@@ -320,26 +322,11 @@ def scrape_portals() -> pd.DataFrame:
                     logger.info(f"  -> {len(jobs)} offerte raccolte")
             except Exception as exc:
                 logger.warning(f"  -> Errore portali: {exc}")
-            time.sleep(1)
+            time.sleep(2)  # Aumentato da 1s a 2s per evitare rate limiting su GitHub Actions
 
-    for term in GOOGLE_SEARCH_TERMS:
-        logger.info(f"Google Jobs: '{term}'")
-        try:
-            jobs = scrape_jobs(
-                site_name=["google"],
-                google_search_term=term,
-                results_wanted=RESULTS_WANTED,
-                hours_old=HOURS_OLD,
-                verbose=0,
-            )
-            if len(jobs) > 0:
-                jobs["source_type"] = "google"
-                jobs["search_country"] = "Italia"
-                all_jobs.append(jobs)
-                logger.info(f"  -> {len(jobs)} offerte Google")
-        except Exception as exc:
-            logger.warning(f"  -> Errore Google Jobs: {exc}")
-        time.sleep(1)
+    # Google Jobs disabilitato: HTTP 429 su GitHub Actions
+    # Le ricerche Google sono coperte da universal_job_search() con Multi-Engine (Bing/Yahoo/Ecosia)
+    logger.info("Google Jobs: SKIPPATO (HTTP 429 su GitHub Actions - uso Multi-Engine fallback)")
 
     if not all_jobs:
         return pd.DataFrame()
