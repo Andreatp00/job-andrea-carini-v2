@@ -413,11 +413,17 @@ def scrape_company_sites() -> pd.DataFrame:
         keywords = company_cfg["search_params"]["keywords"]
         domain = extract_domain(company_cfg["url"])
         
-        # Query mirata con site:
-        query = f'site:{domain} ({keywords}) (lavoro OR stage OR "part-time" OR concorso OR assunzione)'
+        # Query mirata con site: - MIGLIORATA per trovare più risultati
+        # Aggiunto keyword specifiche per back office/amministrativo
+        admin_keywords = " OR ".join([
+            "amministrativo", "contabilità", "back office", "segreteria", "ufficio",
+            "impiegato", "addetto", "ragioneria", "commercialista", "praticante",
+            "stage", "tirocinio", "lavoro", "offerta", "annuncio"
+        ])
+        query = f'site:{domain} ({keywords} OR {admin_keywords}) ("part-time" OR "full-time" OR stage OR tirocinio)'
         logger.info(f"Sito aziendale: {company_cfg['label']}")
         
-        found_links = search_web_engines(query, num_results=8)
+        found_links = search_web_engines(query, num_results=15)  # AUMENTATO da 8 a 15
         
         if not found_links:
             logger.warning(f"  -> Nessun risultato dai motori per {company_cfg['label']}")

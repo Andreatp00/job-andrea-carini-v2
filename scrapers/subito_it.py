@@ -7,15 +7,18 @@ usata dalla loro app mobile e web React → NESSUN anti-bot, nessun 403.
 import logging
 import time
 from datetime import datetime
+from urllib.parse import quote
 
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import EXCLUDE_KEYWORDS_TITLE as EXCLUDE_ROLE_KEYWORDS
+from job_hunter import search_web_engines, normalize_text, contains_any, TARGET_KEYWORDS
 
 import pandas as pd
 import requests
 import tls_client
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger("JobHunter.Subito")
 
@@ -259,11 +262,94 @@ def scrape_subito() -> pd.DataFrame:
         time.sleep(1.5)
 
     if not all_results:
-        logger.info("Nessun annuncio trovato su Subito.it via API")
-        return pd.DataFrame()
+        logger.warning("Subito.it API fallita completamente, uso FALLBACK Multi-Engine...")
+        return _scrape_subito_fallback()
 
     df = pd.DataFrame(all_results)
     df = df[df["job_url"].str.strip() != ""]
     df = df.drop_duplicates(subset=["job_url"], keep="first")
     logger.info(f"Subito.it API: {len(df)} annunci unici")
+    return df
+
+
+def _scrape_subito_fallback() -> pd.DataFrame:
+    """
+    Fallback per Subito.it usando Multi-Engine search (Bing/Yahoo/Ecosia).
+    Usato quando l'API ufficiale fallisce (HTTP 404, 403, 429).
+    """
+    logger.info("=== SUBITO.IT FALLBACK: Multi-Engine Search ===")
+    all_results = []
+    
+    for search in SUBITO_SEARCHES:
+        q = search["q"]
+        label = search.get("label", "Italia")
+        
+        # Costruisci query ottimizzata per Subito.it
+        base_query = f'site:subito.it "{q}"'
+        
+        # Aggiungi keyword geografiche per Trapani
+        if label == "Trapani":
+            geo_keywords = " OR ".join(["Trapani", "Marsala", "Alcamo", "Mazara", "Erice", "Paceco", "Valderice"])
+            base_query += f" ({geo_keywords})"
+        
+        # Aggiungi keyword di lavoro rilevanti
+        work_keywords = " OR ".join([
+            "lavoro", "offerta", "annuncio", "cerco", "assumo",
+            "impiegato", "amministrativo", "contabilità", "ufficio"
+        ])
+        base_query += f" ({work_keywords})"
+        
+        # Esegui ricerca Multi-Engine
+        logger.info(f"Fallback query: {base_query[:80]}...")
+        results = search_web_engines(base_query, num_results=15)
+        
+        if not results:
+            logger.warning(f"  -> Nessun risultato fallback per '{q}'")
+            continue
+        
+        found_count = 0
+        for title, href in results:
+            title_lower = title.lower()
+            
+            # Escludi annunci non lavorativi
+            if any(p in title_lower for p in EXCLUDE_PATTERNS):
+                continue
+            
+            # Includi solo annunci con keyword rilevanti
+            if not any(kw in title_lower for kw in TARGET_KEYWORDS):
+                continue
+            
+            # Determina search_country
+            search_country = label
+            title_lower_for_geo = title.lower()
+            if any(tp in title_lower_for_geo for tp in TRAPANI_CITIES):
+                search_country = "Trapani"
+            elif "sicilia" in title_lower_for_geo:
+                search_country = "Sicilia"
+            
+            all_results.append({
+                "title": title[:250],
+                "company": "Subito.it",
+                "location": "Trapani" if search_country == "Trapani" else "Italia",
+                "search_country": search_country,
+                "job_url": href,
+                "official_url": href,
+                "description": f"Subito.it Fallback | Query: {q}",
+                "site": "subito.it",
+                "source_type": "subito_fallback",
+                "date_posted": datetime.now().strftime("%Y-%m-%d"),
+            })
+            found_count += 1
+        
+        logger.info(f"  -> {found_count} annunci da fallback per '{q}'")
+        time.sleep(1.5)
+    
+    if not all_results:
+        logger.warning("Nessun annuncio trovato su Subito.it (API + Fallback)")
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(all_results)
+    df = df[df["job_url"].str.strip() != ""]
+    df = df.drop_duplicates(subset=["job_url"], keep="first")
+    logger.info(f"Subito.it Fallback: {len(df)} annunci unici")
     return df
