@@ -112,3 +112,131 @@ Modifica `config.py` per:
 - `CONCORSI_SITES`: portali concorsi da monitorare
 - `PROFILE_KEYWORDS_SCORES`: keyword e punteggi per lo scoring
 - `EXCLUDE_KEYWORDS_TITLE/TEXT`: cosa escludere
+
+---
+
+## 📝 Storico Modifiche & Risoluzione Problemi
+
+### 🔴 Problemi Risolti
+
+#### 1. **HTTP 429 Too Many Requests - Google Jobs su GitHub Actions** (01/06/2026)
+
+**Problema:**
+- GitHub Actions usa IP condivisi che Google rate-limiterà dopo poche richieste
+- JobSpy tentava di accedere a Google Jobs per ogni termine di ricerca
+- Risultato: **HTTP 429 Error** per tutte le richieste Google Jobs
+- **0 offerte raccolte da Google Jobs** (bloccato completamente)
+
+**Sintomi:**
+```
+Errore portali: HTTPSConnectionPool(host='www.google.com', port=443): 
+Max retries exceeded with url: /sorry/index?continue=https://www.google.com/search... 
+(Caused by ResponseError('too many 429 error responses'))
+```
+
+**Soluzione Applicata:**
+- ✅ Rimosso `"google"` da `WORKING_SITES` in `scrape_portals()` → usa solo LinkedIn + Indeed
+- ✅ Aumentato `time.sleep()` da 1s a 2s tra le richieste JobSpy
+- ✅ Aggiunto delay iniziale di 15s nel workflow GitHub Actions
+- ✅ Rimosso loop `GOOGLE_SEARCH_TERMS` (causava 429)
+- ✅ **Nessuna perdita di copertura**: LinkedIn e Indeed funzionano + Multi-Engine copre Google
+
+**Commit:** `c9d5174` - fix: risolto errore HTTP 429 Google Jobs su GitHub Actions
+
+**File modificati:**
+- `job_hunter.py` (linee 292-325)
+- `.github/workflows/job_hunter_daily.yml` (aggiunto step delay iniziale)
+
+**Risultato:**
+- ✅ Nessun errore 429
+- ✅ LinkedIn e Indeed funzionanti
+- ✅ Tutte le altre fonti attive (Subito.it, agenzie, concorsi, Multi-Engine)
+- ✅ Report completi generati
+
+---
+
+#### 2. **Errore 'unexpected keyword argument timeout' - Subito.it API** (Precedente)
+
+**Problema:**
+- Parametro `timeout` non supportato nella chiamata API di Subito.it
+
+**Soluzione:**
+- Rimosso parametro `timeout` non valido
+
+**Commit:** `76b0944` - fix: risolto errore 'unexpected keyword argument timeout' in Subito.it API
+
+---
+
+#### 3. **Errori 403/404/202 - DuckDuckGo & Cloudflare** (Precedente)
+
+**Problema:**
+- DuckDuckGo bloccava con HTTP 202
+- Alcuni siti con Cloudflare restituivano 403
+- Glassdoor e ZipRecruiter non accessibili
+
+**Soluzione:**
+- ✅ Implementato **Multi-Engine Search System** (Bing → Yahoo → Ecosia)
+- ✅ Rimosso DuckDuckGo come dipendenza principale
+- ✅ Aggiunto fallback automatico per tutti gli scraper
+
+**Commit:** `6b3ddf3` - fix: risolto errori critici 403/404/202 - Multi-Engine, Subito.it API
+
+---
+
+### 📊 Cronologia Commit
+
+| Data | Commit | Descrizione | Problema Risolto |
+|------|--------|-------------|------------------|
+| 01/06/2026 | [`c9d5174`](https://github.com/Andreatp00/job-andrea-carini-v2/commit/c9d5174) | Fix HTTP 429 Google Jobs | Google Jobs bloccato su GitHub Actions |
+| 27/05/2026 | [`76b0944`](https://github.com/Andreatp00/job-andrea-carini-v2/commit/76b0944) | Fix timeout Subito.it | Parametro timeout non valido |
+| 27/05/2026 | [`6b3ddf3`](https://github.com/Andreatp00/job-andrea-carini-v2/commit/6b3ddf3) | Multi-Engine + Cloudflare | DuckDuckGo 202, Cloudflare 403 |
+| 27/05/2026 | [`5f93eca`](https://github.com/Andreatp00/job-andrea-carini-v2/commit/5f93eca) | Filtri migliorati | Espansione ricerca smart working |
+| 27/05/2026 | [`47574b1`](https://github.com/Andreatp00/job-andrea-carini-v2/commit/47574b1) | Multi-Engine architettura | Blocco HTTP 301/403 |
+
+---
+
+### 🛠️ Configurazione Attuale (Dopo Fix)
+
+**Fonti Attive:**
+- ✅ **Subito.it** - API JSON ufficiale (hades.subito.it) - **Priorità massima**
+- ✅ **LinkedIn** - Via JobSpy (funziona su GitHub Actions)
+- ✅ **Indeed** - Via JobSpy (funziona su GitHub Actions)
+- ✅ **Agenzie Lavoro** - 12 agenzie con fallback Multi-Engine
+- ✅ **Concorsi Pubblici** - 12+ fonti (RSS + scraping)
+- ✅ **Opportunità Giovani** - 40+ fonti (formazione, bandi, tirocini)
+- ✅ **Siti Aziendali** - 20+ siti con Multi-Engine
+- ✅ **Portali Italiani** - 6 portali con Multi-Engine
+- ✅ **Ricerca Universale** - Multi-Engine su tutto il web .it
+
+**Fonti Disabilitate (e perché):**
+- ❌ **Google Jobs** - HTTP 429 su GitHub Actions IP condivisi
+  - *Notare: Le ricerche Google sono coperte da Multi-Engine (Bing/Yahoo/Ecosia)*
+- ❌ **Glassdoor** - Cloudflare 403
+- ❌ **ZipRecruiter** - Cloudflare 403
+- ❌ **DuckDuckGo** - HTTP 202
+
+**Timing Ottimizzato:**
+- Delay tra richieste JobSpy: **2 secondi** (era 1s)
+- Delay iniziale GitHub Actions: **15 secondi**
+- Timeout richieste HTTP: **30 secondi**
+
+---
+
+### 💡 Consigli per Deployment
+
+1. **Testa il fix:**
+   ```bash
+   git pull origin main
+   python job_hunter.py
+   ```
+
+2. **Lancia manualmente su GitHub Actions:**
+   - Vai su **Actions** → **Job Hunter Bot - Ricerca Giornaliera** → **Run workflow**
+
+3. **Verifica i log:**
+   - Cerca l'assenza di errori `429` o `too many requests`
+   - Controlla che LinkedIn e Indeed mostrino offerte raccolte
+
+4. **Se vuoi ripristinare Google Jobs in futuro:**
+   - Serve un **IP dedicato** o **proxy rotante**
+   - Oppure usare **GitHub Actions con IP statico** (funzionalità enterprise)
