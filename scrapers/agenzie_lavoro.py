@@ -19,7 +19,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import COMPANY_RELEVANCE_KEYWORDS as TARGET_ROLE_KEYWORDS
 from config import EXCLUDE_KEYWORDS_TITLE as EXCLUDE_ROLE_KEYWORDS
-from job_hunter import search_web_engines
+from job_hunter import search_web_engines, scrape_agency_page_for_jobs
 
 import pandas as pd
 import requests
@@ -131,6 +131,9 @@ def _scrape_agency_via_multi_engine(agency_name: str, site_domain: str, location
     """
     Fallback: cerca offerte dell'agenzia via Multi-Engine (Bing/Yahoo/Ecosia).
     Usato quando l'URL diretto dell'agenzia ritorna 404 o è bloccato.
+    
+    FIX: Quando trova URL di pagine di ricerca (es. /offerte-lavoro/back-office/),
+    fa scraping della pagina per estrarre i link alle SINGOLE offerte specifiche.
     """
     results = []
     kw_query = "amministrativo OR back office OR impiegato OR stage OR call center"
@@ -146,18 +149,58 @@ def _scrape_agency_via_multi_engine(agency_name: str, site_domain: str, location
                 continue
             if any(kw in title_lower for kw in EXCLUDE_ROLE_KEYWORDS):
                 continue
-            results.append({
-                "title": title[:200],
-                "company": agency_name,
-                "location": location,
-                "search_country": location,
-                "job_url": href,
-                "official_url": href,
-                "description": f"{agency_name} (Multi-Engine Fallback) | {title[:200]}",
-                "site": site_domain,
-                "source_type": "agenzia_lavoro",
-                "date_posted": datetime.now().strftime("%Y-%m-%d"),
-            })
+            
+            # Controlla se è un URL di pagina di ricerca/lista
+            is_search_page = any(x in href.lower() for x in [
+                "/offerte-lavoro/", "/lavoro/", "/cerca-lavoro/", "/trova-lavoro/",
+                "/ricerca", "/search", "filter", "page=", "sort="
+            ])
+            
+            if is_search_page:
+                # È una pagina di ricerca: fai scraping per trovare le singole offerte
+                logger.info(f"    Pagina di ricerca trovata: {href[:80]}...")
+                logger.info(f"    -> Scraping pagina per estrarre offerte specifiche...")
+                
+                specific_jobs = scrape_agency_page_for_jobs(href, agency_name, site_domain)
+                
+                if specific_jobs:
+                    # Aggiorna la location per ogni offerta trovata
+                    for job in specific_jobs:
+                        job["location"] = location
+                        job["search_country"] = location
+                    results.extend(specific_jobs)
+                    logger.info(f"    -> Trovate {len(specific_jobs)} offerte specifiche dalla pagina")
+                else:
+                    # Se non trova offerte specifiche, usa comunque l'URL della pagina
+                    logger.warning(f"    -> Nessuna offerta specifica trovata nella pagina, uso URL generico")
+                    results.append({
+                        "title": title[:200],
+                        "company": agency_name,
+                        "location": location,
+                        "search_country": location,
+                        "job_url": href,
+                        "official_url": href,
+                        "description": f"{agency_name} (Multi-Engine Fallback) | {title[:200]}",
+                        "site": site_domain,
+                        "source_type": "agenzia_lavoro",
+                        "date_posted": datetime.now().strftime("%Y-%m-%d"),
+                    })
+                
+                time.sleep(1)  # Delay tra scraping pagine
+            else:
+                # È già un URL specifico di un'offerta
+                results.append({
+                    "title": title[:200],
+                    "company": agency_name,
+                    "location": location,
+                    "search_country": location,
+                    "job_url": href,
+                    "official_url": href,
+                    "description": f"{agency_name} (Multi-Engine Fallback) | {title[:200]}",
+                    "site": site_domain,
+                    "source_type": "agenzia_lavoro",
+                    "date_posted": datetime.now().strftime("%Y-%m-%d"),
+                })
 
         if results:
             logger.info(f"    Multi-Engine Fallback: {len(results)} risultati per {agency_name}")
