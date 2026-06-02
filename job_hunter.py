@@ -334,14 +334,57 @@ def scrape_portals() -> pd.DataFrame:
     return pd.concat(all_jobs, ignore_index=True)
 
 
+def extract_real_url_from_redirect(url: str) -> str:
+    """
+    Estrae l'URL reale da URL di reindirizzamento (Yahoo, Bing, ecc.).
+
+    Esempio: https://r.search.yahoo.com/.../RU=https%3A%2F%2Fwww.example.com%2F...
+    -> https://www.example.com/
+    """
+    if not url:
+        return url
+
+    # Controlla se è un URL di redirect Yahoo
+    if "r.search.yahoo.com" in url.lower():
+        from urllib.parse import unquote, parse_qs
+        try:
+            # Estrai parametro RU
+            parsed = parse_qs(url)
+            if 'RU' in parsed:
+                encoded_url = parsed['RU'][0]
+                return unquote(encoded_url)
+            # Se non c'è RU, prova a estrarre dall'URL
+            if '/RU=' in url:
+                start = url.find('/RU=') + 4
+                end = url.find('&', start)
+                if end == -1:
+                    end = len(url)
+                encoded_url = url[start:end]
+                return unquote(encoded_url)
+        except Exception:
+            pass
+
+    # Controlla se è un URL di redirect Bing
+    if "bing.com" in url.lower() and "/redir?" in url.lower():
+        try:
+            parsed = parse_qs(url)
+            if 'url' in parsed:
+                return unquote(parsed['url'][0])
+        except Exception:
+            pass
+
+    # Se non è un redirect, restituisci l'URL originale
+    return url
+
 def search_web_engines(query: str, num_results: int = 10) -> list[tuple[str, str]]:
     """
     Motore di ricerca multi-engine sicurissimo. Prova in cascata motori diversi.
     Elimina la dipendenza da DuckDuckGo (che blocca con 202).
-    Restituisce una lista di tuple (titolo, url).
+    Restituisce una lista di tuple (titolo, url reale).
     """
     results = []
-    
+    seen_titles = set()
+
     # --- 1. BING SEARCH ---
     try:
         url = f"https://www.bing.com/search?q={quote(query)}"
@@ -356,7 +399,11 @@ def search_web_engines(query: str, num_results: int = 10) -> list[tuple[str, str
                     href = a_tag.get("href", "")
                     title = normalize_text(a_tag.get_text(" ", strip=True))
                     if href and title and href.startswith("http"):
-                        results.append((title, href))
+                        # Estrai URL reale da redirect (Yahoo/Bing)
+                        real_url = extract_real_url_from_redirect(href)
+                        if real_url and title not in seen_titles:
+                            results.append((title, real_url))
+                            seen_titles.add(title)
             if results:
                 logger.debug(f"    [Bing] {len(results)} risultati trovati")
                 return results[:num_results]
@@ -375,7 +422,11 @@ def search_web_engines(query: str, num_results: int = 10) -> list[tuple[str, str
                     href = a_tag.get("href", "")
                     title = normalize_text(a_tag.get_text(" ", strip=True))
                     if href and title and href.startswith("http"):
-                        results.append((title, href))
+                        # Estrai URL reale da redirect (Yahoo/Bing)
+                        real_url = extract_real_url_from_redirect(href)
+                        if real_url and title not in seen_titles:
+                            results.append((title, real_url))
+                            seen_titles.add(title)
             if results:
                 logger.debug(f"    [Yahoo] {len(results)} risultati trovati")
                 return results[:num_results]
@@ -392,7 +443,11 @@ def search_web_engines(query: str, num_results: int = 10) -> list[tuple[str, str
                 href = a_tag.get("href", "")
                 title = normalize_text(a_tag.get_text(" ", strip=True))
                 if href and title and href.startswith("http"):
-                    results.append((title, href))
+                    # Estrai URL reale da redirect (Yahoo/Bing)
+                    real_url = extract_real_url_from_redirect(href)
+                    if real_url and title not in seen_titles:
+                        results.append((title, real_url))
+                        seen_titles.add(title)
             if results:
                 logger.debug(f"    [Ecosia] {len(results)} risultati trovati")
                 return results[:num_results]
