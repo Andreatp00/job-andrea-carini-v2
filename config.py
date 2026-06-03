@@ -132,31 +132,6 @@ COMPANY_CAREER_SITES = [
     {"company": "Studio Commercialista Trapani", "country": "Trapani", "url": "https://www.commercialistitrapani.it/", "search_params": {"keywords": "collaboratore ragioneria"}, "label": "Commercialisti TP"},
     {"company": "Ordine Commercialisti Trapani", "country": "Trapani", "url": "https://www.odcectrapani.it/", "search_params": {"keywords": "lavoro praticante"}, "label": "ODCEC Trapani"},
 
-    # --- Agenzie per il Lavoro (sede Trapani o che cercano in Sicilia) ---
-    {"company": "Adecco", "country": "Trapani", "url": "https://www.adecco.it/ricerca-lavoro/trapani/", "search_params": {"keywords": "impiegato amministrativo part-time back office"}, "label": "Adecco Trapani"},
-    {"company": "Manpower", "country": "Trapani", "url": "https://www.manpower.it/cerca-lavoro/trapani/", "search_params": {"keywords": "amministrativo contabilità ufficio"}, "label": "Manpower Trapani"},
-    {"company": "Randstad", "country": "Trapani", "url": "https://www.randstad.it/trovare-lavoro/trapani/", "search_params": {"keywords": "impiegato amministrazione back office"}, "label": "Randstad Trapani"},
-    {"company": "Gi Group", "country": "Trapani", "url": "https://www.gigroup.it/offerte-lavoro/trapani/", "search_params": {"keywords": "amministrativo contabilità segreteria"}, "label": "Gi Group Trapani"},
-    {"company": "Openjobmetis", "country": "Trapani", "url": "https://www.openjobmetis.it/offerte-lavoro/trapani/", "search_params": {"keywords": "ufficio amministrazione contabilità"}, "label": "Openjobmetis TP"},
-    {"company": "Synergie Italia", "country": "Trapani", "url": "https://www.synergie-italia.it/offerte-di-lavoro/trapani/", "search_params": {"keywords": "impiegato amministrativo"}, "label": "Synergie TP"},
-    {"company": "Etjca", "country": "Trapani", "url": "https://www.etjca.it/offerte-lavoro/trapani/", "search_params": {"keywords": "amministrativo contabilità"}, "label": "Etjca TP"},
-    {"company": "Humangest", "country": "Trapani", "url": "https://www.humangest.it/cerca-lavoro/trapani/", "search_params": {"keywords": "amministrativo back office"}, "label": "Humangest TP"},
-    {"company": "Injob", "country": "Trapani", "url": "https://www.injob.com/it/offerte-lavoro", "search_params": {"keywords": "amministrativo back office"}, "label": "Injob TP"},
-    {"company": "InfoJobs", "country": "Trapani", "url": "https://www.infojobs.it/offerte-lavoro/trapani", "search_params": {"keywords": "amministrativo contabilità"}, "label": "InfoJobs TP"},
-    {"company": "Monster", "country": "Trapani", "url": "https://www.monster.it/lavoro/ricerca/", "search_params": {"keywords": "amministrativo"}, "label": "Monster TP"},
-    {"company": "Corriere Lavoro", "country": "Trapani", "url": "https://lavoro.corriere.it/", "search_params": {"keywords": "amministrativo contabilità"}, "label": "Corriere Lavoro TP"},
-
-    # --- Smart Working / Remoto Italia ---
-    {"company": "Adecco Remote", "country": "Italia", "url": "https://www.adecco.it/ricerca-lavoro/smart-working/", "search_params": {"keywords": "back office amministrativo contabilità remoto"}, "label": "Adecco Smart Working"},
-    {"company": "Randstad Remote", "country": "Italia", "url": "https://www.randstad.it/trovare-lavoro/smart-working/", "search_params": {"keywords": "amministrativo contabilità"}, "label": "Randstad Smart Working"},
-    {"company": "Jobtech", "country": "Italia", "url": "https://www.jobtech.it/offerte/remote/", "search_params": {"keywords": "amministrativo back office"}, "label": "Jobtech Remote"},
-
-    # --- Siti generali remoti Italia ---
-    {"company": "Remote.co", "country": "Italia", "url": "https://remote.co/remote-jobs/", "search_params": {"keywords": "administrative assistant data entry customer service"}, "label": "Remote.co"},
-    {"company": "Working Nomads", "country": "Italia", "url": "https://www.workingnomads.com/jobs?category=admin-support", "search_params": {"keywords": "remote administrative assistant"}, "label": "Working Nomads"},
-    {"company": "We Work Remotely", "country": "Italia", "url": "https://weworkremotely.com/categories/remote-admin-jobs", "search_params": {"keywords": "remote admin assistant"}, "label": "We Work Remotely"},
-    {"company": "FlexJobs", "country": "Italia", "url": "https://www.flexjobs.com/remote-jobs/entry-level/", "search_params": {"keywords": "administrative data entry customer service"}, "label": "FlexJobs"},
-
     # --- Enti locali Trapani ---
     {"company": "Comune di Trapani", "country": "Trapani", "url": "https://www.comune.trapani.it/", "search_params": {"keywords": "concorso assunzione diplomati"}, "label": "Comune Trapani"},
     {"company": "Provincia Trapani", "country": "Trapani", "url": "https://www.provincia.trapani.it/", "search_params": {"keywords": "concorso categoria C diplomati"}, "label": "Provincia Trapani"},
@@ -375,8 +350,6 @@ PREFERRED_COMPANY_INDICATORS = [
     "back office", "segreteria", "amministrazione", "tributario",
     "agenzia entrate", "inps", "comune", "provincia", "regione",
     "asl", "azienda sanitaria", "ente pubblico", "amministrazione pubblica",
-    "adecco", "manpower", "randstad", "gi group", "openjobmetis",
-    "synergie", "etjca", "humangest", "injob", "infojobs", "monster",
 ]
 
 STARTUP_KEYWORDS = [

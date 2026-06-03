@@ -835,17 +835,12 @@ def scrape_company_sites() -> pd.DataFrame:
 
 def scrape_italian_portals() -> pd.DataFrame:
     """
-    Scraping di portali italiani (TrovoLavoro, Jobrapido, InfoJobs, ecc.)
-    Utilizza la ricerca Multi-Engine (Bing, Yahoo) con operatore site:
-    per aggirare in modo sicuro al 100% i blocchi anti-bot (HTTP 403, 301, Timeout).
+    Scraping del portale TrovoLavoro tramite Multi-Engine (Bing, Yahoo).
+    Jobrapido, Neuvoo, Jobsora, Injob, InfoJobs rimossi perché danno risultati
+    non pertinenti (corsi, blog, pagine generiche) o link di redirect non validi.
     """
     italian_portals = [
         {"name": "TrovoLavoro", "domain": "trovolavoro.it"},
-        {"name": "Jobrapido", "domain": "it.jobrapido.com"},
-        {"name": "Neuvoo", "domain": "neuvoo.it"},
-        {"name": "Jobsora", "domain": "it.jobsora.com"},
-        {"name": "Injob", "domain": "injob.com"},
-        {"name": "InfoJobs", "domain": "infojobs.it"},
     ]
 
     all_jobs = []
@@ -934,6 +929,10 @@ def search_universal_web() -> list[dict]:
         'site:*.it "data entry" "smart working" remoto',
         'site:*.it "stage" impiegato Trapani',
         'site:*.it "tirocinio" ufficio Trapani',
+        # Pagine Gialle, PagineBianche, Bakeca - canali diretti locali
+        'site:paginegialle.it "lavoro" "amministrativo" Trapani',
+        'site:paginebianche.it "lavoro" "amministrativo" Trapani',
+        'site:bakeca.it "lavoro" "ufficio" Trapani',
     ]
     
     for query in queries:
@@ -2184,15 +2183,6 @@ def main():
         logger.warning(f"Errore Subito.it: {exc}")
         df_subito = pd.DataFrame()
     
-    # Scraping Agenzie per il Lavoro
-    try:
-        from scrapers.agenzie_lavoro import scrape_agenzie_lavoro
-        df_agenzie = scrape_agenzie_lavoro()
-        logger.info(f"Agenzie lavoro: {len(df_agenzie) if not df_agenzie.empty else 0}")
-    except Exception as exc:
-        logger.warning(f"Errore agenzie lavoro: {exc}")
-        df_agenzie = pd.DataFrame()
-    
     # Scraping Concorsi Pubblici
     try:
         from scrapers.concorsi_pubblici import scrape_concorsi
@@ -2229,7 +2219,7 @@ def main():
 
     frames = [
         frame for frame in [
-            df_portals, df_company, df_subito, df_agenzie, df_concorsi, df_opportunita, df_italian_portals, df_universal
+            df_portals, df_company, df_subito, df_concorsi, df_opportunita, df_italian_portals, df_universal
         ] if not frame.empty
     ]
 
