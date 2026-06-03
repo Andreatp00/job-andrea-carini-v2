@@ -8,7 +8,7 @@ echo (Questa operazione puo' richiedere alcuni minuti, non chiudere la finestra)
 echo.
 
 cd /d "%~dp0"
-call .venv\Scripts\python.exe main.py --no-telegram --no-email --no-ai
+call .venv\Scripts\python.exe main.py --no-telegram --no-email
 
 echo.
 echo =======================================================

@@ -38,6 +38,7 @@ def build_tracker_sheet(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 def export_reports(relevant_df: pd.DataFrame, excluded_df: pd.DataFrame) -> tuple[Path | None, Path | None]:
+    settings.REPORT_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     csv_path = settings.REPORT_DIR / f"jobs_relevant_{timestamp}.csv"
     xlsx_path = settings.REPORT_DIR / f"jobs_report_{timestamp}.xlsx"

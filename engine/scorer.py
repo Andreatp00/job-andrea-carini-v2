@@ -295,6 +295,7 @@ def filter_and_rank(df: pd.DataFrame, previous_fingerprints: set[str]) -> tuple[
                 eval_df.at[idx, k] = v
 
     result_df = pd.concat([df.reset_index(drop=True), eval_df.reset_index(drop=True)], axis=1)
+    result_df = result_df.loc[:, ~result_df.columns.duplicated()]
 
     excluded_df = result_df[result_df["excluded"] == True]
     relevant_df = result_df[result_df["excluded"] == False]

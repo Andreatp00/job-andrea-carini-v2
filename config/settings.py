@@ -37,7 +37,7 @@ class Settings:
     BASE_DIR: Path = Path(__file__).parent.parent
     LOG_DIR: Path = BASE_DIR / "logs"
     DATA_DIR: Path = BASE_DIR / "data"
-    REPORT_DIR: Path = DATA_DIR / "reports"
+    REPORT_DIR: Path = BASE_DIR / "report_lavoro"
     DB_PATH: Path = DATA_DIR / "jobs.db"
 
     # --- Scraping ---
