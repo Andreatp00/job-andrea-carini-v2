@@ -336,63 +336,122 @@ def scrape_portals() -> pd.DataFrame:
 
 def extract_real_url_from_redirect(url: str) -> str:
     """
-    Estrae l'URL reale da URL di reindirizzamento (Yahoo, Bing, ecc.).
-
-    Esempio: https://r.search.yahoo.com/.../RU=https%3A%2F%2Fwww.example.com%2F...
-    -> https://www.example.com/
+    Estrae l'URL reale da URL di reindirizzamento (Yahoo, Bing, Ecosia, ecc.).
     
-    FIX: Il parametro RU è nel PATH dell'URL Yahoo, non nella query string!
-    Quindi parse_qs() non funziona. Bisogna estrarlo manualmente dal path.
+    Gestisce tutti i formati noti di redirect:
+    - Yahoo: r.search.yahoo.com/.../RU=URL/RK=... o /RS=...
+    - Yahoo: it.search.yahoo.com/.../RU=URL&...
+    - Yahoo: search.yahoo.com/...?ru=URL&...
+    - Bing: bing.com/redir?url=URL&...
+    - Ecosia: ecosia.org/search?...&url=URL
+    
+    Args:
+        url: URL potenzialmente di redirect
+        
+    Returns:
+        URL reale decodificato, oppure l'URL originale se non è un redirect
     """
     if not url:
         return url
 
-    from urllib.parse import unquote
+    from urllib.parse import unquote, urlparse
 
-    # Controlla se è un URL di redirect Yahoo
-    if "r.search.yahoo.com" in url.lower():
+    url_lower = url.lower()
+    
+    # === YAHOO REDIRECT ===
+    if any(x in url_lower for x in ["r.search.yahoo.com", "it.search.yahoo.com", "search.yahoo.com"]):
         try:
-            # Il parametro /RU= è nel PATH, non nella query string
-            # Esempio: /RU=https%3a%2f%2fwww.gigroup.it%2fofferte-lavoro%2f.../RK=2/RS=...
+            # Caso 1: /RU= nel path (formato piu comune)
+            # Esempio: https://r.search.yahoo.com/.../RU=https%3A%2F%2Fsite.com%2F.../RK=2/RS=...
             if '/RU=' in url:
                 start = url.find('/RU=') + 4
-                # Trova la fine dell'URL codificato
-                # L'URL termina con /RK= o /RS= o fine stringa
-                end_rk = url.find('/RK=', start)
-                end_rs = url.find('/RS=', start)
-                
-                # Prendi il primo marker di fine
-                end = len(url)
-                if end_rk > 0:
-                    end = min(end, end_rk)
-                if end_rs > 0:
-                    end = min(end, end_rs)
-                
+                # Marker di fine: /RK=, /RS=, &, ?, #
+                end_markers = [url.find('/RK=', start), url.find('/RS=', start),
+                              url.find('&', start), url.find('?', start), url.find('#', start)]
+                end_markers = [x for x in end_markers if x > 0]
+                end = min(end_markers) if end_markers else len(url)
                 encoded_url = url[start:end]
-                # Decodifica l'URL (es. %3a -> :, %2f -> /)
                 real_url = unquote(encoded_url)
-                
-                # Verifica che sia un URL valido
                 if real_url.startswith('http'):
+                    logger.debug(f"  Yahoo redirect estratto: {real_url[:100]}")
                     return real_url
+            
+            # Caso 2: ?ru= nella query string
+            if '?ru=' in url_lower:
+                start = url_lower.find('?ru=') + 4
+                end_markers = [url.find('&', start), url.find('#', start)]
+                end_markers = [x for x in end_markers if x > 0]
+                end = min(end_markers) if end_markers else len(url)
+                encoded_url = url[start:end]
+                real_url = unquote(encoded_url)
+                if real_url.startswith('http'):
+                    logger.debug(f"  Yahoo redirect (query) estratto: {real_url[:100]}")
+                    return real_url
+            
+            # Caso 3: URL diretto (nessun redirect)
+            if url.startswith('http'):
+                return url
+                
         except Exception as exc:
             logger.debug(f"Errore estrazione URL Yahoo: {exc}")
 
-    # Controlla se è un URL di redirect Bing
-    if "bing.com" in url.lower() and "/redir?" in url.lower():
+    # === BING REDIRECT ===
+    if "bing.com" in url_lower and "url=" in url_lower:
         try:
-            from urllib.parse import parse_qs
-            parsed = parse_qs(url)
-            if 'url' in parsed:
-                return unquote(parsed['url'][0])
-        except Exception:
-            pass
+            # Bing metter url= nel path o query string
+            # Esempio: https://www.bing.com/redir?k=...&url=https%3A%2F%2Fsite.com%2F...
+            # parse_qs NON funziona, estraiamo manualmente
+            start = url_lower.find("url=") + 4
+            if start > 3:  # Found
+                # Trova il prossimo delimiter: &, #, ?
+                end_markers = [url.find('&', start), url.find('#', start), url.find('?', start)]
+                end_markers = [x for x in end_markers if x > start]
+                end = min(end_markers) if end_markers else len(url)
+                encoded_url = url[start:end]
+                real_url = unquote(encoded_url)
+                if real_url.startswith('http'):
+                    logger.debug(f"  Bing redirect estratto: {real_url[:100]}")
+                    return real_url
+        except Exception as exc:
+            logger.debug(f"Errore estrazione URL Bing: {exc}")
 
-    # Se non è un redirect, restituisci l'URL originale
+    # === ECOSIA REDIRECT ===
+    if "ecosia.org" in url_lower and "url=" in url_lower:
+        try:
+            start = url_lower.find("url=") + 4
+            if start > 3:
+                end_markers = [url.find('&', start), url.find('#', start)]
+                end_markers = [x for x in end_markers if x > start]
+                end = min(end_markers) if end_markers else len(url)
+                encoded_url = url[start:end]
+                real_url = unquote(encoded_url)
+                if real_url.startswith('http'):
+                    logger.debug(f"  Ecosia redirect estratto: {real_url[:100]}")
+                    return real_url
+        except Exception as exc:
+            logger.debug(f"Errore estrazione URL Ecosia: {exc}")
+
+    # === DDUCKGO REDIRECT ===
+    if "duckduckgo.com" in url_lower and "uddg=" in url_lower:
+        try:
+            start = url_lower.find("uddg=") + 5
+            if start > 4:
+                end_markers = [url.find('&', start), url.find('#', start)]
+                end_markers = [x for x in end_markers if x > start]
+                end = min(end_markers) if end_markers else len(url)
+                encoded_url = url[start:end]
+                real_url = unquote(encoded_url)
+                if real_url.startswith('http'):
+                    logger.debug(f"  DuckDuckGo redirect estratto: {real_url[:100]}")
+                    return real_url
+        except Exception as exc:
+            logger.debug(f"Errore estrazione URL DuckDuckGo: {exc}")
+
+    # Se non è un redirect noto, restituisci l'URL originale
     return url
 
 
-def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: str) -> list[dict]:
+def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: str, required_location: str = None) -> list[dict]:
     """
     Fa scraping di una pagina di un'agenzia di lavoro e estrae i link alle SINGOLE offerte.
     
@@ -404,6 +463,7 @@ def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: st
         page_url: URL della pagina di ricerca dell'agenzia
         agency_name: Nome dell'agenzia (es. "Gi Group")
         site_domain: Dominio del sito (es. "gigroup.it")
+        required_location: Location richiesta per validazione (opzionale)
     
     Returns:
         Lista di dizionari con le offerte specifiche trovate
@@ -422,9 +482,8 @@ def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: st
         # Cerca tutti i link nella pagina
         all_links = soup.find_all("a", href=True)
         
-        # Pattern per identificare link a offerte specifiche
-        # Ogni agenzia ha pattern diversi, cerchiamo i più comuni
-        job_link_patterns = [
+        # Pattern GENERICI per identificare link a offerte specifiche
+        generic_job_patterns = [
             r'/offerte-lavoro/[^/]+/\d+',  # /offerte-lavoro/titolo/12345
             r'/lavoro/[^/]+/\d+',          # /lavoro/titolo/12345
             r'/job/[^/]+',                 # /job/titolo
@@ -436,6 +495,42 @@ def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: st
             r'-\d+\.html?$',               # titolo-12345.html
             r'/\d{4,}',                    # /12345 (ID numerico)
         ]
+        
+        # Pattern SPECIFICI per ogni agenzia (basato su analisi reali)
+        agency_specific_patterns = {
+            "gigroup.it": [
+                r'/offerte-lavoro/[^/]+-[^/]+-\d{4,}',  # /offerte-lavoro/titolo-citta-12345
+                r'/offerte-lavoro/[^/]+/\d{4,}',        # /offerte-lavoro/titolo/12345
+            ],
+            "randstad.it": [
+                r'/lavoro/[^/]+/\d{4,}',              # /lavoro/titolo/12345
+                r'/lavoro/[^/]+-[^/]+-\d{4,}',         # /lavoro/titolo-citta-12345
+            ],
+            "manpower.it": [
+                r'/job/[^/]+/jobid-\d{4,}',            # /job/titolo/jobid-12345
+                r'/cerca-lavoro/[^/]+/\d{4,}',        # /cerca-lavoro/titolo/12345
+            ],
+            "adecco.it": [
+                r'/ricerca-lavoro/dettaglio-offerta/\d{4,}',  # /ricerca-lavoro/dettaglio-offerta/12345
+                r'/offerte/[^/]+/\d{4,}',              # /offerte/titolo/12345
+            ],
+            "openjobmetis.it": [
+                r'/lavoro/[^/]+/\d{4,}',
+                r'/offerte/[^/]+-\d{4,}',
+            ],
+            "synergie-italia.it": [
+                r'/lavoro/[^/]+/\d{4,}',
+            ],
+            "humangest.it": [
+                r'/lavoro/[^/]+/\d{4,}',
+            ],
+            "etjca.it": [
+                r'/lavoro/[^/]+/\d{4,}',
+            ],
+        }
+        
+        # Combina pattern generici e specifici
+        job_link_patterns = generic_job_patterns + agency_specific_patterns.get(site_domain, [])
         
         # Parole chiave per filtrare offerte pertinenti
         relevant_keywords = [
@@ -455,7 +550,8 @@ def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: st
         
         for link in all_links:
             href = link.get("href", "")
-            text = link.get_text(" ", strip=True).lower()
+            text = link.get_text(" ", strip=True)
+            text_lower = text.lower()
             
             # Converti URL relativo in assoluto
             if href.startswith("/"):
@@ -471,14 +567,19 @@ def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: st
             if site_domain not in href:
                 continue
             
-            # Skip URL di pagine di ricerca/lista
-            if any(x in href.lower() for x in [
+            # Skip URL di pagine di ricerca/lista (SENZA ID specifico)
+            # NUOVO: Non escludere se l'URL ha un pattern di offerta specifica
+            search_page_indicators = [
                 "/search", "/cerca", "/ricerca", "?q=", "?s=",
-                "/offerte-lavoro/", "/lavoro/", "/trova-lavoro/",
                 "filter", "page=", "sort="
-            ]):
-                # Eccezione: se l'URL ha un ID numerico o slug specifico, accettalo
-                if not any(re.search(p, href.lower()) for p in job_link_patterns):
+            ]
+            
+            is_search_page = any(x in href.lower() for x in search_page_indicators)
+            
+            # Se è una pagina di ricerca ma NON ha pattern di offerta specifica, salta
+            if is_search_page:
+                has_job_pattern = any(re.search(p, href.lower()) for p in job_link_patterns)
+                if not has_job_pattern:
                     continue
             
             # Verifica se il link sembra un'offerta specifica
@@ -492,21 +593,36 @@ def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: st
             
             # Controlla testo del link
             if not is_job_link and text:
-                if any(kw in text for kw in relevant_keywords):
-                    if not any(kw in text for kw in exclude_keywords):
+                if any(kw in text_lower for kw in relevant_keywords):
+                    if not any(kw in text_lower for kw in exclude_keywords):
                         is_job_link = True
             
             if not is_job_link:
                 continue
             
             # Verifica che il testo sia pertinente
-            if text and any(kw in text for kw in exclude_keywords):
+            if text and any(kw in text_lower for kw in exclude_keywords):
                 continue
+            
+            # Validazione location (se richiesta)
+            if required_location:
+                location_valid = False
+                # Controlla nel testo del link
+                if text and _validate_location_text(text, required_location):
+                    location_valid = True
+                # Controlla nell'URL
+                if not location_valid:
+                    if _validate_location_text(href, required_location):
+                        location_valid = True
+                
+                if not location_valid:
+                    logger.debug(f"    -> SKIP (location non validata): {text[:60] if text else href[:80]}")
+                    continue
             
             seen_urls.add(href)
             
             # Estrai titolo dal testo del link o dall'URL
-            title = link.get_text(" ", strip=True)
+            title = text
             if not title or len(title) < 5:
                 # Estrai titolo dall'URL
                 title = href.split("/")[-1].replace("-", " ").replace("_", " ").title()
@@ -514,8 +630,8 @@ def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: st
             results.append({
                 "title": title[:200],
                 "company": agency_name,
-                "location": "Trapani",  # Sarà determinato poi
-                "search_country": "Trapani",
+                "location": required_location or "Trapani",
+                "search_country": required_location or "Trapani",
                 "job_url": href,
                 "official_url": href,
                 "description": f"{agency_name} | {title[:200]}",
@@ -531,6 +647,52 @@ def scrape_agency_page_for_jobs(page_url: str, agency_name: str, site_domain: st
         logger.debug(f"    Errore scraping pagina {agency_name}: {exc}")
     
     return results
+
+
+def _validate_location_text(text: str, required_location: str) -> bool:
+    """
+    Valida che il testo contenga la location in modo specifico.
+    Funzione helper per scrape_agency_page_for_jobs().
+    """
+    if not text:
+        return False
+    
+    text_lower = text.lower()
+    location_lower = required_location.lower()
+    
+    # Pattern che ACCETTANO
+    accept_patterns = [
+        rf'\b{location_lower}\b',
+        rf'provincia di {location_lower}',
+        rf'{location_lower}\(tp\)',
+        rf'{location_lower}\(trapani\)',
+        rf'a {location_lower}\b',
+        rf'in {location_lower}\b',
+        rf'per {location_lower}\b',
+    ]
+    
+    # Pattern che RIFIUTANO (più città insieme)
+    reject_patterns = [
+        rf'{location_lower},\s*\w+',
+        rf'\w+,\s*{location_lower},',
+        rf'\w+\s+{location_lower}\s+\w+',
+    ]
+    
+    # Se c'è pattern di rifiuto, non valido
+    for pattern in reject_patterns:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            return False
+    
+    # Se c'è pattern di accettazione, valido
+    for pattern in accept_patterns:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            return True
+    
+    # Controllo speciale per Smart Working
+    if location_lower in ["smart working", "remoto", "italia (smart working)"]:
+        return True
+    
+    return False
 
 def search_web_engines(query: str, num_results: int = 10) -> list[tuple[str, str]]:
     """

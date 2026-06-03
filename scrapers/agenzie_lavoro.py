@@ -109,6 +109,72 @@ AGENCY_CONFIGS = [
 
 # TARGET_ROLE_KEYWORDS e EXCLUDE_ROLE_KEYWORDS sono ora importati da config.py
 
+
+def _validate_location(text: str, required_location: str) -> bool:
+    """
+    Valida che il testo contenga la location in modo specifico.
+    
+    Accetta:
+    - "Trapani" (esatto)
+    - "Provincia di Trapani"
+    - "Trapani (TP)"
+    - "a Trapani"
+    
+    Rifiuta:
+    - "Trapani, Milano, Roma" (elenco di città)
+    - "Milano Trapani Roma" (più città)
+    - "Lavoro in Sicilia" (se required_location="Trapani")
+    
+    Args:
+        text: Testo da validare
+        required_location: Location richiesta (es. "Trapani")
+    
+    Returns:
+        True se la location è validata, False altrimenti
+    """
+    if not text:
+        return False
+    
+    text_lower = text.lower()
+    location_lower = required_location.lower()
+    
+    # Pattern che ACCETTANO la location
+    accept_patterns = [
+        rf'\b{location_lower}\b',  # "Trapani" come parola isolata
+        rf'provincia di {location_lower}',
+        rf'{location_lower}\(tp\)',
+        rf'{location_lower}\(trapani\)',
+        rf'a {location_lower}\b',
+        rf'in {location_lower}\b',
+        rf'per {location_lower}\b',
+        rf'{location_lower} e',
+        rf'e {location_lower}\b',
+    ]
+    
+    # Pattern che RIFIUTANO la location (più città insieme)
+    reject_patterns = [
+        rf'{location_lower},\s*\w+',  # "Trapani, Milano"
+        rf'\w+,\s*{location_lower},',  # "Milano, Trapani,"
+        rf'\w+\s+{location_lower}\s+\w+',  # "Milano Trapani Roma"
+    ]
+    
+    # Se rimane uno dei pattern di rifiuto, non è valido
+    for pattern in reject_patterns:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            return False
+    
+    # Se non c'è nessun pattern di accettazione, non è valido
+    for pattern in accept_patterns:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            return True
+    
+    # Controllo speciale per "Smart Working" - non serve location
+    if required_location.lower() in ["smart working", "remoto", "italia (smart working)"]:
+        return True
+    
+    return False
+
+
 def _fetch_url(url: str, use_tls: bool = False) -> tuple[int, str]:
     """
     Scarica una URL. Prova prima con requests standard.
@@ -161,18 +227,20 @@ def _scrape_agency_via_multi_engine(agency_name: str, site_domain: str, location
                 logger.info(f"    Pagina di ricerca trovata: {href[:80]}...")
                 logger.info(f"    -> Scraping pagina per estrarre offerte specifiche...")
                 
-                specific_jobs = scrape_agency_page_for_jobs(href, agency_name, site_domain)
+                specific_jobs = scrape_agency_page_for_jobs(href, agency_name, site_domain, required_location=location)
                 
                 if specific_jobs:
-                    # Aggiorna la location per ogni offerta trovata
-                    for job in specific_jobs:
-                        job["location"] = location
-                        job["search_country"] = location
                     results.extend(specific_jobs)
                     logger.info(f"    -> Trovate {len(specific_jobs)} offerte specifiche dalla pagina")
                 else:
-                    # Se non trova offerte specifiche, usa comunque l'URL della pagina
-                    logger.warning(f"    -> Nessuna offerta specifica trovata nella pagina, uso URL generico")
+                    # NON usare URL generico! Meglio saltare che avere link inutili
+                    logger.warning(f"    -> Nessuna offerta specifica trovata nella pagina, SKIP (nessun URL generico aggiunto)")
+                
+                time.sleep(1)  # Delay tra scraping pagine
+            else:
+                # È già un URL specifico di un'offerta
+                # Validazione location: il titolo deve contenere la location in modo specifico
+                if _validate_location(title, location):
                     results.append({
                         "title": title[:200],
                         "company": agency_name,
@@ -185,22 +253,9 @@ def _scrape_agency_via_multi_engine(agency_name: str, site_domain: str, location
                         "source_type": "agenzia_lavoro",
                         "date_posted": datetime.now().strftime("%Y-%m-%d"),
                     })
-                
-                time.sleep(1)  # Delay tra scraping pagine
-            else:
-                # È già un URL specifico di un'offerta
-                results.append({
-                    "title": title[:200],
-                    "company": agency_name,
-                    "location": location,
-                    "search_country": location,
-                    "job_url": href,
-                    "official_url": href,
-                    "description": f"{agency_name} (Multi-Engine Fallback) | {title[:200]}",
-                    "site": site_domain,
-                    "source_type": "agenzia_lavoro",
-                    "date_posted": datetime.now().strftime("%Y-%m-%d"),
-                })
+                    logger.info(f"    -> URL specifico validato: {title[:60]}")
+                else:
+                    logger.warning(f"    -> URL specifico SCARTATO (location non validata): {title[:60]}")
 
         if results:
             logger.info(f"    Multi-Engine Fallback: {len(results)} risultati per {agency_name}")
