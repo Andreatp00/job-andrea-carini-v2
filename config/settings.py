@@ -41,12 +41,12 @@ class Settings:
     DB_PATH: Path = DATA_DIR / "jobs.db"
 
     # --- Scraping ---
-    HOURS_OLD: int = 120
-    RESULTS_WANTED: int = 50
+    HOURS_OLD: int = 168
+    RESULTS_WANTED: int = 100
     HISTORY_RETENTION_DAYS: int = 60
 
     # --- Soglie punteggio ---
-    MINIMUM_RELEVANT_SCORE: int = 20
+    MINIMUM_RELEVANT_SCORE: int = 15
     TOP_MATCH_SCORE: int = 70
     MEDIUM_MATCH_MIN: int = 50
     MEDIUM_MATCH_MAX: int = 69

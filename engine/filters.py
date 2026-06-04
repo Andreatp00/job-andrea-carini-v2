@@ -31,7 +31,9 @@ def is_actual_job_posting(url: str, title: str) -> bool:
     
     if any(kw in title_lower for kw in [
         "impiegato", "addetto", "back office", "amministrativo", "contabilità",
-        "segreteria", "ragioneria", "stage", "tirocinio", "praticante"
+        "segreteria", "ragioneria", "stage", "tirocinio", "praticante",
+        "call center", "data entry", "customer service", "operatore",
+        "assistente", "smart working", "remoto", "social media",
     ]):
         return True
     
@@ -66,14 +68,19 @@ def is_english_text(text: str, threshold: float = 0.7) -> bool:
         "lavoro", "ufficio", "amministrativo", "contabilità", "segreteria",
         "impiegato", "addetto", "azienda", "cercasi", "offerta", "annuncio",
         "sede", "reparto", "part", "time", "full", "contratto", "esperienza",
-        "diploma", "ragioneria", "back", "office", "stagista", "tirocinio"
+        "diploma", "ragioneria", "back", "office", "stagista", "tirocinio",
+        "remoto", "smart", "working", "call", "center", "operatore",
     }
     
     english_count = sum(1 for word in words if word in english_words)
     italian_count = sum(1 for word in words if word in italian_words)
     total = len(words)
     
-    if total > 10 and (italian_count / total) < 0.3:
+    # Se c'è abbastanza italiano, NON è testo inglese
+    if total > 10 and (italian_count / total) > 0.15:
+        return False
+    
+    if total > 10 and (italian_count / total) < 0.05 and (english_count / total) > 0.4:
         return True
     
     if total > 10 and (english_count / total) > threshold:
@@ -91,18 +98,26 @@ def detect_language_fit(full_text: str) -> tuple[bool, bool, bool]:
     return english_ok, other_lang_required, local_language_plus
 
 def check_degree_requirement(full_text: str) -> str:
-    """Restituisce il motivo dell'esclusione o una stringa vuota."""
+    """Restituisce il motivo dell'esclusione o una stringa vuota.
+    
+    NOTA: Reso meno aggressivo. Esclude SOLO se la laurea è
+    esplicitamente OBBLIGATORIA. Non esclude se dice solo 'laurea'
+    senza 'richiesta/obbligatoria', perché molti annunci la menzionano
+    come 'preferibile' ma accettano anche il diploma.
+    """
+    # Esclude solo se dice esplicitamente "laurea richiesta/obbligatoria"
     if re.search(r"\blaurea\b.{0,30}\b(richiesta|richiesto|necessaria|obbligatoria|indispensabile)\b", full_text):
+        # Ma NON escludere se dice anche "diploma" come alternativa
+        if contains_any(full_text, ["diploma", "diplomato", "o diploma", "oppure diploma"]):
+            return ""
         return "richiede_laurea"
     
-    if re.search(r"\blaurea\b", full_text) and not re.search(r"\b(diploma|diplomato|non richiede|senza)\b", full_text):
-        if not contains_any(full_text, ["diploma", "diplomato", "non richiede laurea", "senza laurea", "basti il diploma"]):
-            return "probabilmente_richiede_laurea"
-            
+    # NON escludere più su "probabilmente richiede laurea" — troppi falsi positivi
     return ""
 
 def check_seniority_requirement(full_text: str) -> str:
-    if re.search(r"\b([5-9]|[1-9][0-9])\+?\s*(?:anni?|years?)\b|>\s*[45]\s*(?:anni?|years?)", full_text):
+    # Esclude solo se richiede 7+ anni di esperienza (prima era 5+)
+    if re.search(r"\b([7-9]|[1-9][0-9])\+?\s*(?:anni?|years?)\b|>\s*[7-9]\s*(?:anni?|years?)", full_text):
         return "troppo_senior"
     return ""
 
@@ -120,6 +135,6 @@ def check_excluded_keywords(title: str, description: str) -> str:
 
 def check_manual_role_blacklist(title: str) -> str:
     if contains_any(title.lower(), ["operaio", "cameriere", "barista", "cuoco", "pizzaiolo", 
-                                    "commesso", "venditore", "autista", "elettricista", "idraulico"]):
+                                    "elettricista", "idraulico", "muratore", "oss", "badante"]):
         return "ruolo_non_compatibile"
     return ""

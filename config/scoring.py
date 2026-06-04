@@ -1,59 +1,95 @@
 """
 Sistema di scoring e keyword per la rilevanza degli annunci.
 
-Contiene le liste di parole chiave per:
-- Rilevanza aziendale
-- Esclusione titoli e testi
-- Punteggi profilo
-- Livello master (diploma)
-- Famiglie di ruoli
-- Indicatori aziende preferite e startup
+AGGIORNATO per riflettere il CV completo di Andrea Carini:
+- Sviluppo aziendale, brand design, e-commerce
+- Contabilità, logistica, gestione ordini
+- Call center, data entry, assistenza clienti (smart working)
+- Concorsi pubblici e bandi giovani
 """
 
 # ============================================================
 # KEYWORD PER RELEVANZA (per descrizioni annunci)
 # ============================================================
 COMPANY_RELEVANCE_KEYWORDS: list[str] = [
+    # Amministrazione e contabilità
     "amministrativo", "contabilità", "fatturazione", "segreteria", "ufficio",
-    "back office", "ragioneria", "commercialista", "gestionali", "e-commerce",
-    "wordpress", "amministrazione", "contabile", "bilancio", "partita doppia",
-    "iva", "dichiarazione", "cassa", "fatture", "ordini", "acquisti",
-    "customer service", "servizio clienti", "praticante", "stage",
+    "back office", "ragioneria", "commercialista", "gestionali", "contabile",
+    "bilancio", "partita doppia", "iva", "dichiarazione", "fatture",
+    "amministrazione", "cassa", "prima nota",
+    # E-commerce e web
+    "e-commerce", "ecommerce", "wordpress", "shopify", "woocommerce",
+    "seo", "social media", "marketing digitale", "web marketing",
+    "gestione ordini", "shop online", "content creator", "copywriter",
+    # Logistica e ordini
+    "ordini", "acquisti", "logistica", "gestione magazzino", "spedizioni",
+    "inventario", "fornitori",
+    # Customer service e call center
+    "customer service", "servizio clienti", "assistenza clienti",
+    "call center", "inbound", "outbound", "operatore telefonico",
+    "help desk", "supporto clienti", "supporto tecnico",
+    # Data entry
+    "data entry", "inserimento dati",
+    # Assistente e booking
+    "assistente virtuale", "virtual assistant", "booking", "prenotazioni",
+    "moderatore",
+    # Concorsi
+    "praticante", "stage", "tirocinio", "apprendistato",
     "categoria c", "categoria d", "diplomati", "istruttore amministrativo",
-    "funzionario amministrativo", "concorso pubblico", "impiegato",
-    "addetto", "assistente", "operatore", "part-time", "tempo parziale",
-    "remoto", "smart working", "lavoro da casa", "da remoto", "telelavoro",
-    "flessibile", "mezza giornata", "mattina", "pomeriggio", "full remote", "100% remote", "lavoro agile",
-    "call center", "data entry", "inserimento dati", "help desk", "assistenza clienti",
-    "tirocinio", "tirocinio formativo", "apprendistato", "junior", "senza esperienza", "inbound", "outbound",
+    "funzionario amministrativo", "concorso pubblico", "concorso",
+    # Generico
+    "impiegato", "addetto", "assistente", "operatore",
+    "part-time", "tempo parziale", "remoto", "smart working",
+    "lavoro da casa", "da remoto", "telelavoro", "full remote",
+    "100% remote", "lavoro agile",
+    # Design e brand
+    "graphic design", "brand", "illustrator", "canva", "photoshop",
+    "identità visiva",
 ]
 
+# ============================================================
+# KEYWORD DI ESCLUSIONE — SOLO ruoli veramente incompatibili
+# ============================================================
 EXCLUDE_KEYWORDS_TITLE: list[str] = [
-    "laurea", "laureato", "ingegnere", "architetto", "medico", "infermiere",
-    "dirigente", "direttore", "capo", "responsabile", "senior", "vice presidente",
-    "magazziniere", "operaio", "cameriere", "barista", "cuoco", "pizzaiolo",
-    "commesso", "venditore", "promoter", "agente di commercio",
-    "programmatore", "sviluppatore", "informatico", "tecnico informatico",
-    "elettricista", "idraulico", "manutenzione", "autista", "fattorino",
-    "corriere", "magazzino", "logistica", "carrellista", "montatore",
+    # Laurea specifica richiesta nel TITOLO
+    "ingegnere", "architetto", "medico", "infermiere", "avvocato",
+    "biologo", "chimico", "farmacista", "psicologo", "fisioterapista",
+    # Troppo senior
+    "dirigente", "direttore", "vice presidente", "cfo", "cto", "ceo",
+    # Lavori manuali/fisici incompatibili
+    "operaio", "cameriere", "barista", "cuoco", "pizzaiolo",
+    "elettricista", "idraulico", "manutenzione", "fattorino",
+    "corriere", "carrellista", "montatore",
     "meccanico", "pulizie", "oss", "badante", "cantiere", "muratore",
+    # IT puro (programmazione vera)
+    "programmatore", "sviluppatore", "developer", "devops",
+    "tecnico informatico", "system administrator",
 ]
+
+# NOTA: Rimossi da esclusione rispetto a prima:
+# - "logistica" → Andrea ha esperienza in logistica e gestione ordini
+# - "magazzino" → Andrea ha esperienza in gestione magazzino
+# - "commesso" → Andrea ha esperienza vendita B2B/B2C
+# - "venditore" → Andrea ha esperienza vendita
+# - "promoter" → potrebbe essere smart working
+# - "agente di commercio" → potrebbe essere interessante
+# - "responsabile" → troppo generico, ci sono "responsabile back office" che vanno bene
+# - "capo" → troppo generico
+# - "senior" → troppo generico, ci sono junior/senior call center
 
 EXCLUDE_KEYWORDS_TEXT: list[str] = [
     "laurea richiesta", "laurea in", "laurea magistrale", "laurea triennale",
     "titolo di studio superiore al diploma",
     "esperienza di almeno 10 anni",
-    "turni notturni", "lavoro notturno", "notturno",
+    "turni notturni", "lavoro notturno",
     "si richiede patente c", "patente c", "carta di qualificazione",
 ]
 
 # ============================================================
 # SISTEMA DI SCORING
 # ============================================================
-
-# Parole chiave del profilo per punteggio
 PROFILE_KEYWORDS_SCORES: list[tuple[str, int]] = [
-    # 15 punti — competenze chiave
+    # 15 punti — competenze CORE del CV
     ("back office", 15),
     ("contabilità", 15),
     ("prima nota", 15),
@@ -66,8 +102,7 @@ PROFILE_KEYWORDS_SCORES: list[tuple[str, int]] = [
     ("wms", 15),
     ("crm", 15),
     ("logistica", 15),
-    ("magazzino", 15),
-    ("ordini", 15),
+    ("gestione ordini", 15),
     ("spedizioni", 15),
     ("gestionali", 15),
     ("partita doppia", 15),
@@ -78,14 +113,24 @@ PROFILE_KEYWORDS_SCORES: list[tuple[str, int]] = [
     ("shopify", 15),
     ("woocommerce", 15),
     ("e-commerce", 15),
+    ("ecommerce", 15),
     ("commercialista", 15),
     ("categoria c", 15),
     ("categoria d", 15),
     ("concorso pubblico", 15),
     ("istruttore amministrativo", 15),
     ("diplomati", 15),
-
-    # 8 punti — competenze di contorno
+    # Nuove competenze dal CV
+    ("brand design", 15),
+    ("illustrator", 15),
+    ("social media", 15),
+    ("web marketing", 15),
+    ("seo", 15),
+    ("gestione fornitori", 15),
+    ("b2b", 15),
+    ("b2c", 15),
+    
+    # 8 punti — competenze secondarie
     ("ragioneria", 8),
     ("amministrazione", 8),
     ("amministrativo", 8),
@@ -99,7 +144,28 @@ PROFILE_KEYWORDS_SCORES: list[tuple[str, int]] = [
     ("word", 8),
     ("rendicontazione", 8),
     ("dichiarazione dei redditi", 8),
-
+    # Call center e customer service
+    ("call center", 8),
+    ("customer service", 8),
+    ("assistenza clienti", 8),
+    ("servizio clienti", 8),
+    ("help desk", 8),
+    ("supporto clienti", 8),
+    ("operatore telefonico", 8),
+    ("inbound", 8),
+    ("outbound", 8),
+    # Data entry
+    ("data entry", 8),
+    ("inserimento dati", 8),
+    # Design
+    ("canva", 8),
+    ("photoshop", 8),
+    ("graphic design", 8),
+    # E-commerce operations
+    ("shop online", 8),
+    ("gestione magazzino", 8),
+    ("inventario", 8),
+    
     # 5 punti — competenze di base
     ("addetto", 5),
     ("impiegato", 5),
@@ -107,7 +173,6 @@ PROFILE_KEYWORDS_SCORES: list[tuple[str, int]] = [
     ("operatore", 5),
     ("sportello", 5),
     ("front office", 5),
-    ("classificazione", 5),
     ("archiviazione", 5),
     ("protocollo", 5),
     ("pec", 5),
@@ -119,6 +184,16 @@ PROFILE_KEYWORDS_SCORES: list[tuple[str, int]] = [
     ("concorso", 5),
     ("graduatoria", 5),
     ("tempo indeterminato", 5),
+    ("assistente virtuale", 5),
+    ("virtual assistant", 5),
+    ("booking", 5),
+    ("prenotazioni", 5),
+    ("moderatore", 5),
+    ("content creator", 5),
+    ("copywriter", 5),
+    ("tirocinio", 5),
+    ("stage", 5),
+    ("apprendistato", 5),
 ]
 
 # Livello master = diploma adatto
@@ -140,13 +215,23 @@ ROLE_FAMILY_KEYWORDS: dict[str, list[str]] = {
         "amministrazione", "contabile",
     ],
     "back_office_segreteria": [
-        "back office", "segreteria", "segreterio", "archiviazione",
-        "protocollo", "gestione documentale", "customer service",
-        "servizio clienti", "assistente amministrativo",
+        "back office", "segreteria", "archiviazione",
+        "protocollo", "gestione documentale",
+        "assistente amministrativo",
     ],
-    "ecommerce_acquisti": [
-        "e-commerce", "wordpress", "ordini", "acquisti", "logistica",
-        "fornitori", "magazzino ufficio",
+    "customer_service_call_center": [
+        "call center", "customer service", "servizio clienti",
+        "assistenza clienti", "help desk", "supporto clienti",
+        "operatore telefonico", "inbound", "outbound",
+    ],
+    "data_entry": [
+        "data entry", "inserimento dati", "trascrizione",
+    ],
+    "ecommerce_web_social": [
+        "e-commerce", "ecommerce", "wordpress", "shopify", "woocommerce",
+        "ordini", "acquisti", "logistica", "fornitori",
+        "social media", "seo", "web marketing", "content creator",
+        "brand design", "graphic design",
     ],
     "concorsi_pubblici": [
         "concorso pubblico", "categoria c", "categoria d", "istruttore",
@@ -163,6 +248,9 @@ PREFERRED_COMPANY_INDICATORS: list[str] = [
     "back office", "segreteria", "amministrazione", "tributario",
     "agenzia entrate", "inps", "comune", "provincia", "regione",
     "asl", "azienda sanitaria", "ente pubblico", "amministrazione pubblica",
+    # Agenzie interinali (cercano sempre smart working)
+    "adecco", "manpower", "randstad", "gi group", "openjobmetis",
+    "synergie", "etjca", "humangest", "lavorint", "umana",
 ]
 
 STARTUP_KEYWORDS: list[str] = [

@@ -10,7 +10,7 @@ class JobSpyCollector(BaseCollector):
         super().__init__('JobSpy')
         
     def collect(self) -> pd.DataFrame:
-        """Scraping portali classici (LinkedIn, Indeed) con JobSpy."""
+        """Scraping portali classici (LinkedIn, Indeed, Glassdoor) con JobSpy."""
         try:
             from jobspy import scrape_jobs
         except Exception as exc:
@@ -21,7 +21,8 @@ class JobSpyCollector(BaseCollector):
         total = len(SEARCH_TERMS) * len(COUNTRY_SEARCHES)
         counter = 0
 
-        WORKING_SITES = ["indeed", "linkedin"]
+        # Aggiunti glassdoor e zip_recruiter per massimizzare copertura
+        WORKING_SITES = ["indeed", "linkedin", "glassdoor", "zip_recruiter"]
 
         for country_cfg in COUNTRY_SEARCHES:
             for term in SEARCH_TERMS:
@@ -48,8 +49,6 @@ class JobSpyCollector(BaseCollector):
                 except Exception as exc:
                     self.logger.warning(f"  -> Errore portali: {exc}")
                 time.sleep(2)
-
-        self.logger.info("Google Jobs: SKIPPATO (uso Multi-Engine fallback)")
 
         if not all_jobs:
             return pd.DataFrame()
