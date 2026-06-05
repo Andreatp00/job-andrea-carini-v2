@@ -1,6 +1,7 @@
 import re
 from utils.text import contains_any
-from config import EXCLUDE_KEYWORDS_TITLE, EXCLUDE_KEYWORDS_TEXT
+from config import EXCLUDE_KEYWORDS_TITLE, EXCLUDE_KEYWORDS_TEXT, IT_KEYWORDS_TITLE
+from engine.geo import has_valid_training
 
 def is_actual_job_posting(url: str, title: str) -> bool:
     """
@@ -127,6 +128,10 @@ def check_excluded_keywords(title: str, description: str) -> str:
     
     if contains_any(title_lower, EXCLUDE_KEYWORDS_TITLE):
         return "titolo_non_compatibile"
+
+    if contains_any(title_lower, IT_KEYWORDS_TITLE):
+        if not has_valid_training(description, title):
+            return "ruolo_it_richiede_esperienza"
 
     if contains_any(full_text, EXCLUDE_KEYWORDS_TEXT):
         return "testo_non_compatibile"

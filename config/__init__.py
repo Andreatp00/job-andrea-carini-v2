@@ -27,6 +27,7 @@ from config.scoring import (
     ROLE_FAMILY_KEYWORDS,
     PREFERRED_COMPANY_INDICATORS,
     STARTUP_KEYWORDS,
+    IT_KEYWORDS_TITLE,
 )
 from config.geo_data import (
     LOCALITY_KEYWORDS,
@@ -59,6 +60,7 @@ __all__ = [
     "ROLE_FAMILY_KEYWORDS",
     "PREFERRED_COMPANY_INDICATORS",
     "STARTUP_KEYWORDS",
+    "IT_KEYWORDS_TITLE",
     # geo
     "LOCALITY_KEYWORDS",
     "TRAPANI_TOWNS",

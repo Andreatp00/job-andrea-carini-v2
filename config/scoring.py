@@ -61,9 +61,13 @@ EXCLUDE_KEYWORDS_TITLE: list[str] = [
     "elettricista", "idraulico", "manutenzione", "fattorino",
     "corriere", "carrellista", "montatore",
     "meccanico", "pulizie", "oss", "badante", "cantiere", "muratore",
-    # IT puro (programmazione vera)
+]
+
+# IT puro (ammesso SOLO con formazione/tirocinio da zero)
+IT_KEYWORDS_TITLE: list[str] = [
     "programmatore", "sviluppatore", "developer", "devops",
-    "tecnico informatico", "system administrator",
+    "tecnico informatico", "system administrator", "software engineer",
+    "web developer", "front end", "back end", "full stack"
 ]
 
 # NOTA: Rimossi da esclusione rispetto a prima:
@@ -129,6 +133,33 @@ PROFILE_KEYWORDS_SCORES: list[tuple[str, int]] = [
     ("gestione fornitori", 15),
     ("b2b", 15),
     ("b2c", 15),
+    
+    # Banche, Assicurazioni e Credito (molto desiderati)
+    ("banca", 15),
+    ("bancario", 15),
+    ("sportello bancario", 15),
+    ("settore creditizio", 15),
+    ("assicurativo", 15),
+    ("assicurazione", 15),
+    ("credito", 15),
+    ("mutui", 15),
+    ("prestiti", 15),
+    
+    # Formazione IT / Developer (SOLO se formazione)
+    ("programmazione", 15),
+    ("developer", 15),
+    ("sviluppatore", 15),
+    ("coding", 15),
+    ("javascript", 15),
+    ("python", 15),
+    ("html", 15),
+    ("css", 15),
+    
+    # Parole chiave formazione (plus assoluto)
+    ("formazione gratuita", 15),
+    ("corso gratuito", 15),
+    ("si offre formazione", 15),
+    ("tirocinio formativo", 15),
     
     # 8 punti — competenze secondarie
     ("ragioneria", 8),
@@ -237,6 +268,15 @@ ROLE_FAMILY_KEYWORDS: dict[str, list[str]] = {
         "concorso pubblico", "categoria c", "categoria d", "istruttore",
         "funzionario", "pubblica amministrazione", "comune", "provincia",
         "asl", "inps", "agenzia entrate",
+    ],
+    "banche_assicurazioni": [
+        "banca", "bancario", "sportello bancario", "creditizio",
+        "credito", "assicurazione", "assicurativo", "mutui", "prestiti",
+        "filiale"
+    ],
+    "it_formazione": [
+        "programmatore", "sviluppatore", "developer", "programmazione",
+        "software", "coding", "front end", "back end", "full stack"
     ],
 }
 

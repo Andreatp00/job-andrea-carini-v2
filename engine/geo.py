@@ -59,6 +59,18 @@ def has_vitto_alloggio(description: str, title: str) -> bool:
     text = f"{title} {description}".lower()
     return any(kw in text for kw in VITTO_ALLOGGIO_KEYWORDS)
 
+def has_valid_training(description: str, title: str) -> bool:
+    """Verifica se l'annuncio offre formazione valida o non richiede esperienza."""
+    text = f"{title} {description}".lower()
+    training_keywords = [
+        "formazione gratuita", "corso gratuito", "academy",
+        "tirocinio formativo", "stage formativo", "formazione retribuita",
+        "si offre formazione", "formazione iniziale", "percorso formativo",
+        "senza esperienza", "prima esperienza", "nessuna esperienza",
+        "neo diplomati", "neodiplomati", "apprendistato"
+    ]
+    return any(kw in text for kw in training_keywords)
+
 def is_wrong_region(location: str) -> bool:
     """Rileva se la località è palesemente in un'altra regione."""
     loc = normalize_text(location).lower()
@@ -122,14 +134,18 @@ def is_allowed_location(location: str, search_country: str = "", description: st
     # Smart working → sempre OK indipendentemente dalla località
     if is_smart_working(location, description, title):
         return True
+        
+    # Formazione valida → OK ovunque in Italia
+    if has_valid_training(description, title):
+        return True
     
-    # Altre città siciliane → SOLO con vitto e alloggio
+    # Altre città siciliane → SOLO con vitto e alloggio o formazione
     if is_sicily_other(location):
-        if has_vitto_alloggio(description, title):
+        if has_vitto_alloggio(description, title) or has_valid_training(description, title):
             return True
         return False
     
-    # Italia generica → accettata (verrà filtrata dopo se non è smart working)
+    # Italia generica → accettata (verrà filtrata dopo se non è smart working o formazione)
     if is_italy_only_location(location):
         return True
     

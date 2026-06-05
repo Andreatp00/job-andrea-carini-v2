@@ -25,6 +25,18 @@ LOCAL_QUERIES = [
     '"tirocinio" Trapani',
     '"apprendistato" Trapani',
     '"concorso" "amministrativo" Trapani',
+    # Banche e creditizio Trapani/Palermo
+    '"sportello bancario" Trapani',
+    '"impiegato bancario" Trapani',
+    '"banca" tirocinio Trapani',
+    '"sportello bancario" Palermo',
+    '"impiegato bancario" Palermo',
+    '"banca" tirocinio Palermo',
+    '"assicurazione" tirocinio Trapani',
+    # Formazione/tirocini locali
+    '"tirocinio formativo" Trapani',
+    '"formazione gratuita" Trapani',
+    '"formazione gratuita" Palermo',
     # Palermo
     '"back office" Palermo',
     '"impiegato amministrativo" Palermo',
@@ -78,6 +90,42 @@ REMOTE_QUERIES = [
     'concorsi pubblici Palermo "categoria C"',
     'concorsi pubblici Sicilia diplomati',
     '"bando" "diplomati" Sicilia',
+
+    # ═══ BANCHE / CREDITIZIO / ASSICURATIVO ═══
+    '"sportello bancario" tirocinio',
+    '"sportello bancario" "senza esperienza"',
+    '"impiegato bancario" tirocinio',
+    '"impiegato bancario" "prima esperienza"',
+    '"operatore bancario" stage',
+    '"settore bancario" tirocinio formativo',
+    '"settore creditizio" tirocinio',
+    '"settore creditizio" "senza esperienza"',
+    '"settore assicurativo" tirocinio',
+    '"settore assicurativo" "prima esperienza"',
+    '"consulente assicurativo" junior',
+    '"agente assicurativo" formazione',
+    '"back office bancario"',
+    '"back office assicurativo"',
+    '"addetto credito" tirocinio',
+    '"analista credito" junior',
+    '"impiegato assicurativo"',
+    '"banca" tirocinio diplomati',
+    '"istituto credito" stage',
+    '"filiale bancaria" stage',
+
+    # ═══ LAVORI CON FORMAZIONE GRATUITA / SENZA ESPERIENZA ═══
+    '"formazione gratuita" lavoro',
+    '"formazione retribuita" lavoro',
+    '"tirocinio formativo" "senza esperienza"',
+    '"tirocinio retribuito" "senza esperienza"',
+    '"nessuna esperienza richiesta" formazione',
+    '"corso gratuito" lavoro giovani',
+    '"formazione pagata" tirocinio',
+    '"academy" lavoro junior',
+    '"academy" "neoassunti"',
+    '"percorso formativo" lavoro',
+    '"inserimento lavorativo" formazione',
+    '"si offre formazione" impiegato',
 ]
 
 
