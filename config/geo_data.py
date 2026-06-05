@@ -1,28 +1,13 @@
 """
 Dati geografici consolidati.
 
-Contiene tutte le liste di località, comuni, province e regioni
-usate per il filtraggio geografico degli annunci, più le keyword
-per il lavoro da remoto.
+LOGICA GEOGRAFICA:
+- Trapani e provincia → SEMPRE OK (in presenza)
+- Palermo città → OK (se ne vale la pena)
+- Smart working/remoto → SEMPRE OK (qualsiasi città)
+- Altre città siciliane (Catania, Messina...) → SOLO se offre vitto+alloggio
+- Altre regioni italiane → ESCLUSE (a meno che non sia remoto)
 """
-
-# ============================================================
-# KEYWORD LOCALITÀ — dal config.py originale (righe 362-366)
-# ============================================================
-LOCALITY_KEYWORDS: dict[str, list[str]] = {
-    "trapani": [
-        "trapani", "valderice", "paceco", "erice", "custonaci",
-        "san vito", "alcamo", "marsala", "mazara", "castelvetrano",
-    ],
-    "sicilia": [
-        "sicilia", "sicily", "catania", "messina", "siracusa",
-        "ragusa", "enna", "caltanissetta", "agrigento",
-    ],
-    "palermo": [
-        "palermo", "bagheria", "monreale", "carini",
-        "partinico", "termini imerese",
-    ],
-}
 
 # ============================================================
 # COMUNI PROVINCIA DI TRAPANI — lista completa
@@ -36,20 +21,34 @@ TRAPANI_TOWNS: list[str] = [
 ]
 
 # ============================================================
-# PRINCIPALI CITTÀ SICILIANE (capoluoghi + isola)
-# ============================================================
-SICILIA_CITIES: list[str] = [
-    "palermo", "catania", "messina", "siracusa", "ragusa",
-    "enna", "caltanissetta", "agrigento", "trapani",
-    "sicilia", "sicily",
-]
-
-# ============================================================
-# COMUNI AREA PALERMO
+# COMUNI AREA PALERMO (accettati in presenza)
 # ============================================================
 PALERMO_TOWNS: list[str] = [
     "palermo", "bagheria", "monreale", "carini",
     "partinico", "termini imerese",
+]
+
+# ============================================================
+# CITTÀ SICILIANE ACCETTATE (Trapani + Palermo)
+# ============================================================
+SICILIA_ACCETTATE: list[str] = TRAPANI_TOWNS + PALERMO_TOWNS
+
+# ============================================================
+# CITTÀ SICILIANE NON ACCETTATE (troppo lontane, solo con vitto/alloggio)
+# ============================================================
+SICILIA_ALTRE_CITTA: list[str] = [
+    "catania", "messina", "siracusa", "ragusa",
+    "enna", "caltanissetta", "agrigento",
+    "modica", "noto", "taormina", "milazzo", "acireale",
+    "gela", "vittoria", "comiso", "caltagirone",
+    "piazza armerina", "augusta", "lentini",
+]
+
+# Mantenuta per compatibilità — ora include TUTTE le città siciliane
+SICILIA_CITIES: list[str] = [
+    "palermo", "catania", "messina", "siracusa", "ragusa",
+    "enna", "caltanissetta", "agrigento", "trapani",
+    "sicilia", "sicily",
 ]
 
 # ============================================================
@@ -63,6 +62,16 @@ WRONG_REGIONS: list[str] = [
 ]
 
 # ============================================================
+# KEYWORD VITTO E ALLOGGIO (per accettare città lontane)
+# ============================================================
+VITTO_ALLOGGIO_KEYWORDS: list[str] = [
+    "vitto e alloggio", "vitto alloggio", "alloggio incluso",
+    "alloggio fornito", "alloggio gratuito", "con alloggio",
+    "con vitto", "residenza inclusa", "posto letto",
+    "accommodation", "housing provided", "dormitorio",
+]
+
+# ============================================================
 # KEYWORD LAVORO DA REMOTO / SMART WORKING
 # ============================================================
 SMART_WORKING_KEYWORDS: list[str] = [
@@ -70,3 +79,10 @@ SMART_WORKING_KEYWORDS: list[str] = [
     "lavoro da casa", "telelavoro", "full remote",
     "100% remote", "lavoro agile",
 ]
+
+# Mantenuta per compatibilità
+LOCALITY_KEYWORDS: dict[str, list[str]] = {
+    "trapani": TRAPANI_TOWNS,
+    "sicilia": SICILIA_CITIES,
+    "palermo": PALERMO_TOWNS,
+}

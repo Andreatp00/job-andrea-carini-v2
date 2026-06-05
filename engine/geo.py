@@ -3,6 +3,7 @@ from utils.text import normalize_text
 from utils.url import extract_domain
 from config.geo_data import (
     TRAPANI_TOWNS, SICILIA_CITIES, PALERMO_TOWNS,
+    SICILIA_ALTRE_CITTA, VITTO_ALLOGGIO_KEYWORDS,
     WRONG_REGIONS, SMART_WORKING_KEYWORDS
 )
 
@@ -15,10 +16,18 @@ def infer_country_label(location: str, existing_label: str = "") -> str:
     for loc_keyword in TRAPANI_TOWNS:
         if loc_keyword in location_text:
             return "Trapani"
-            
-    for loc_keyword in SICILIA_CITIES:
+    
+    for loc_keyword in PALERMO_TOWNS:
         if loc_keyword in location_text:
-            return "Sicilia"
+            return "Palermo"
+    
+    # Altre città siciliane → etichettate come "Sicilia (altra)"
+    for loc_keyword in SICILIA_ALTRE_CITTA:
+        if loc_keyword in location_text:
+            return "Sicilia (altra)"
+    
+    if any(kw in location_text for kw in ["sicilia", "sicily"]):
+        return "Sicilia"
             
     if any(reg in location_text for reg in ["italia", "italy", "italiano", "nazionale"]):
         return "Italia"
@@ -30,15 +39,25 @@ def is_trapani_area(location: str) -> bool:
     loc = normalize_text(location).lower()
     return any(area in loc for area in TRAPANI_TOWNS)
 
-def is_sicily_area(location: str) -> bool:
-    """Verifica se la località è in Sicilia."""
-    loc = normalize_text(location).lower()
-    return any(area in loc for area in SICILIA_CITIES)
-
 def is_palermo_area(location: str) -> bool:
     """Verifica se la località è Palermo o provincia."""
     loc = normalize_text(location).lower()
     return any(area in loc for area in PALERMO_TOWNS)
+
+def is_sicily_other(location: str) -> bool:
+    """Verifica se la località è in un'altra città siciliana (non Trapani/Palermo)."""
+    loc = normalize_text(location).lower()
+    return any(area in loc for area in SICILIA_ALTRE_CITTA)
+
+def is_sicily_area(location: str) -> bool:
+    """Verifica se la località è in Sicilia (qualsiasi città)."""
+    loc = normalize_text(location).lower()
+    return any(area in loc for area in SICILIA_CITIES)
+
+def has_vitto_alloggio(description: str, title: str) -> bool:
+    """Verifica se l'annuncio offre vitto e alloggio."""
+    text = f"{title} {description}".lower()
+    return any(kw in text for kw in VITTO_ALLOGGIO_KEYWORDS)
 
 def is_wrong_region(location: str) -> bool:
     """Rileva se la località è palesemente in un'altra regione."""
@@ -80,38 +99,50 @@ def is_italy_only_location(location: str) -> bool:
     italy_keywords = ["italia", "italy", "nazionale", "tutta italia"]
     return any(kw in loc for kw in italy_keywords)
 
-def is_allowed_location(location: str, search_country: str = "") -> bool:
+def is_allowed_location(location: str, search_country: str = "", description: str = "", title: str = "") -> bool:
     """
     Determina se una località è permessa per questo profilo.
-    Permesso: Trapani, Sicilia, Smart Working/Remoto/Italia (solo se search_country è Trapani/Sicilia)
-    Escluso: Tutte le altre città/regioni italiane e estere
+    
+    REGOLE:
+    - Trapani e provincia → SEMPRE OK
+    - Palermo città → OK
+    - Smart Working/Remoto → SEMPRE OK
+    - Altre città siciliane (Catania, Messina...) → SOLO con vitto e alloggio
+    - Italia generica → OK solo se smart working
+    - Altre regioni → ESCLUSE
     """
-    loc = normalize_text(location).lower()
-    
-    if is_trapani_area(location) or is_sicily_area(location) or is_palermo_area(location):
+    # Trapani e provincia → sempre OK
+    if is_trapani_area(location):
         return True
     
-    if is_smart_working(location, "", ""):
+    # Palermo → OK
+    if is_palermo_area(location):
         return True
     
-    if is_italy_only_location(location):
-        country = normalize_text(search_country).lower()
-        if country in ["trapani", "sicilia", "palermo"]:
+    # Smart working → sempre OK indipendentemente dalla località
+    if is_smart_working(location, description, title):
+        return True
+    
+    # Altre città siciliane → SOLO con vitto e alloggio
+    if is_sicily_other(location):
+        if has_vitto_alloggio(description, title):
             return True
         return False
     
+    # Italia generica → accettata (verrà filtrata dopo se non è smart working)
+    if is_italy_only_location(location):
+        return True
+    
+    # Regione sbagliata → esclusa
     if is_wrong_region(location):
         return False
     
-    if "italia" in loc or "italy" in loc:
-        return True
-    
+    # Default: accetta (potrebbe essere smart working non rilevato)
     return True
 
 def has_wrong_location_in_text(title: str, description: str, location: str) -> bool:
     """
     Verifica se il testo dell'annuncio indica una località diversa da quella dichiarata.
-    Esclude offerte dove il testo menziona esplicitamente altre città/regioni.
     """
     full_text = f"{title} {description}".lower()
     declared_location = location.lower()
@@ -124,9 +155,6 @@ def has_wrong_location_in_text(title: str, description: str, location: str) -> b
     return False
 
 def get_location_from_url(url: str) -> str:
-    """
-    Estrae eventuali indicazioni di località dall'URL.
-    """
     if not url:
         return ""
     

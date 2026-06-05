@@ -12,7 +12,7 @@ from engine.geo import (
     infer_country_label, is_allowed_location, is_wrong_region,
     has_strict_wrong_region_in_text, has_wrong_location_in_text,
     get_location_from_url, is_smart_working, is_trapani_area,
-    is_palermo_area, is_sicily_area
+    is_palermo_area, is_sicily_area, is_sicily_other, has_vitto_alloggio
 )
 from engine.filters import (
     is_english_text, contains_any,
@@ -74,16 +74,18 @@ def compute_geo_score(location: str, title: str, desc: str, country: str) -> int
     geo_score = 0
     full_text = f"{title} {location} {desc}".lower()
     
-    if is_trapani_area(location):
-        geo_score += 30
-    elif country == "Trapani":
+    if is_trapani_area(location) or country == "Trapani":
         geo_score += 30
     elif is_palermo_area(location) or country == "Palermo":
         geo_score += 10
-    elif is_sicily_area(location) or country == "Sicilia":
-        geo_score += 15
-    elif country == "Italia" and is_smart_working(location, desc, title):
+    elif is_smart_working(location, desc, title):
         geo_score += 20
+    elif is_sicily_other(location) or country == "Sicilia (altra)":
+        # Altre città siciliane: punteggio basso, solo se con vitto/alloggio
+        if has_vitto_alloggio(desc, title):
+            geo_score += 10
+        else:
+            geo_score += 0
     elif country == "Italia":
         geo_score += 5
     
@@ -134,7 +136,7 @@ def evaluate_job(row: pd.Series, previous_fingerprints: set[str]) -> dict:
     if country and country not in INCLUDED_COUNTRIES:
         return {"excluded": True, "excluded_reason": "paese_fuori_scope"}
 
-    if not is_allowed_location(location, row.get("search_country", "")):
+    if not is_allowed_location(location, row.get("search_country", ""), description, title):
         return {"excluded": True, "excluded_reason": "localita_non_pertinente"}
     
     if is_wrong_region(location) and not is_smart_working(location, description, title):

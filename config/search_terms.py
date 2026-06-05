@@ -147,7 +147,7 @@ COUNTRY_SEARCHES: list[dict] = [
     {"country_indeed": "Italy", "location": "Italy", "label": "Italia (Smart Working)"},
 ]
 
-INCLUDED_COUNTRIES: set[str] = {"Italia", "Trapani", "Sicilia", "Palermo", "Europa"}
+INCLUDED_COUNTRIES: set[str] = {"Italia", "Trapani", "Sicilia", "Sicilia (altra)", "Palermo", "Europa", "Italia (Smart Working)"}
 EXCLUDED_COUNTRIES: set[str] = set()
 
 # ============================================================
