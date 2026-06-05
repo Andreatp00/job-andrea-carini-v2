@@ -64,7 +64,7 @@ def has_valid_training(description: str, title: str) -> bool:
     text = f"{title} {description}".lower()
     training_keywords = [
         "formazione gratuita", "corso gratuito", "academy",
-        "tirocinio formativo", "stage formativo", "formazione retribuita",
+        "tirocinio", "stage", "formazione retribuita",
         "si offre formazione", "formazione iniziale", "percorso formativo",
         "senza esperienza", "prima esperienza", "nessuna esperienza",
         "neo diplomati", "neodiplomati", "apprendistato"
